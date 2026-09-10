@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 from datasets import load_dataset
 
-from eval.metrics import exact_match, f1_score
+from eval.metrics import exact_match, f1_score, ndcg_at_k
 from retrieval.bge_retriever import BGERetriever
 from retrieval.bm25_retriever import BM25Retriever
 
@@ -34,8 +34,12 @@ def _flatten_context(context: Any) -> list[str]:
         titles = context.get("title", [])
         sentences = context.get("sentences", context.get("text", []))
         if isinstance(sentences, list) and sentences:
-            return [" ".join(map(str, item)) if isinstance(item, list) else str(item)
-                    for item in sentences]
+            return [
+                f"{title}: {' '.join(map(str, sentence_group))}".strip(": ")
+                if isinstance(sentence_group, list)
+                else f"{title}: {sentence_group}".strip(": ")
+                for title, sentence_group in zip(titles, sentences)
+            ]
         if isinstance(titles, list):
             return [str(item) for item in titles]
     if isinstance(context, list):
@@ -60,6 +64,24 @@ def _normalize_example(example: dict[str, Any]) -> tuple[str, str, list[str]]:
     context = _first_value(example, ("context", "paragraphs", "documents"))
     passages = [passage for passage in _flatten_context(context) if passage.strip()]
     return question, answer, passages
+
+
+def _normalize_with_labels(example: dict[str, Any]):
+    question, answer, passages = _normalize_example(example)
+    context = example.get("context", example.get("paragraphs", example.get("documents", [])))
+    if isinstance(context, dict):
+        supporting_titles = set(example.get("supporting_facts", {}).get("title", []))
+        labels = [int(title in supporting_titles) for title in context.get("title", [])]
+    elif isinstance(context, list):
+        labels = [
+            int(bool(item.get("is_supporting", item.get("supporting", item.get("label", False)))))
+            if isinstance(item, dict) else 0
+            for item in context
+        ]
+    else:
+        labels = [0] * len(passages)
+    labels = (labels + [0] * len(passages))[:len(passages)]
+    return question, answer, passages, labels
 
 
 def _load_split(dataset_name: str):
@@ -92,7 +114,7 @@ def _evaluate_retriever(
 ):
     scores = []
     for example in examples:
-        question, answer, passages = _normalize_example(example)
+        question, answer, passages, labels = _normalize_with_labels(example)
         if not passages:
             continue
         retriever = (
@@ -100,17 +122,22 @@ def _evaluate_retriever(
             if model_name is not None
             else retriever_cls(passages)
         )
-        results = retriever.retrieve(question, top_k=1)
+        results = retriever.retrieve(question, top_k=len(passages))
         prediction = passages[results[0][0]] if results else ""
+        ranked_scores = [0.0] * len(passages)
+        for rank, (index, _) in enumerate(results):
+            ranked_scores[index] = 1.0 / (rank + 1)
         scores.append({
             "EM": exact_match(prediction, answer),
             "F1": f1_score(prediction, answer),
+            "NDCG@10": ndcg_at_k(labels, ranked_scores, k=10),
         })
 
     count = len(scores)
     return {
         "EM": sum(item["EM"] for item in scores) / count if count else 0.0,
         "F1": sum(item["F1"] for item in scores) / count if count else 0.0,
+        "NDCG@10": sum(item["NDCG@10"] for item in scores) / count if count else 0.0,
         "samples": count,
     }
 

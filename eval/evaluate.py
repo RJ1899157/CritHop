@@ -6,8 +6,8 @@ import json
 import os
 from pathlib import Path
 
-from eval.baselines import DATASET_NAMES, _load_split, _normalize_example
-from eval.metrics import exact_match, f1_score
+from eval.baselines import DATASET_NAMES, _load_split, _normalize_with_labels
+from eval.metrics import exact_match, f1_score, ndcg_at_k
 from eval.paper_numbers import PAPER_NUMBERS
 from pipeline.crithop import CritHop
 
@@ -22,19 +22,27 @@ def _run_crithop(
 ) -> dict[str, float | int]:
     em_scores = []
     f1_scores = []
+    ndcg_scores = []
 
     for example in examples:
-        question, answer, passages = _normalize_example(example)
+        question, answer, passages, labels = _normalize_with_labels(example)
         if not passages:
             continue
         result = pipeline.run(question, passages)
         prediction = result["answer"]
+        selected = result["supporting_passages"]
+        selected_scores = [
+            1.0 / (selected.index(passage) + 1) if passage in selected else 0.0
+            for passage in passages
+        ]
         em_scores.append(exact_match(prediction, answer))
         f1_scores.append(f1_score(prediction, answer))
+        ndcg_scores.append(ndcg_at_k(labels, selected_scores, k=10))
 
     return {
         "EM": _mean(em_scores),
         "F1": _mean(f1_scores),
+        "NDCG@10": _mean(ndcg_scores),
         "samples": len(em_scores),
     }
 
@@ -95,7 +103,8 @@ def _print_table(comparison: dict) -> None:
             scores = methods.get(method, {"EM": None, "F1": None})
             em = "—" if scores["EM"] is None else f"{scores['EM']:.2f}"
             f1 = "—" if scores["F1"] is None else f"{scores['F1']:.2f}"
-            values.append(f"EM={em}, F1={f1}")
+            ndcg = "—" if scores.get("NDCG@10") is None else f"{scores['NDCG@10']:.2f}"
+            values.append(f"EM={em}, F1={f1}, NDCG@10={ndcg}")
         print(" | ".join(values))
 
 

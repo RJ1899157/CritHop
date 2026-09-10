@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import string
 from collections import Counter
+import math
 
 
 def _normalize(text: str) -> str:
@@ -50,3 +51,18 @@ def f1_score(prediction: str, ground_truth: str) -> float:
         2 * predicted_precision * predicted_recall
         / (predicted_precision + predicted_recall)
     )
+
+
+def ndcg_at_k(labels: list[int], scores: list[float], k: int = 10) -> float:
+    """Calculate binary-label NDCG@k for one ranked candidate list."""
+    if not labels or len(labels) != len(scores) or k <= 0:
+        return 0.0
+    order = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)
+    ranked_labels = [labels[index] for index in order[:k]]
+    ideal_labels = sorted(labels, reverse=True)[:k]
+
+    def dcg(values: list[int]) -> float:
+        return sum(relevance / math.log2(position + 2) for position, relevance in enumerate(values))
+
+    ideal_dcg = dcg(ideal_labels)
+    return dcg(ranked_labels) / ideal_dcg if ideal_dcg else 0.0
