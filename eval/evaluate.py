@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from eval.baselines import DATASET_NAMES, _load_split, _normalize_example
@@ -65,6 +66,8 @@ def evaluate(
             "HopRAG": _paper_entry("HopRAG", dataset_name),
             "CritHop": crithop_scores,
         }
+        if os.getenv("USE_RERANKER", "false").lower() == "true":
+            comparison[dataset_name]["Phase 2 (reranker-slm)"] = crithop_scores
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -74,13 +77,22 @@ def evaluate(
 
 
 def _print_table(comparison: dict) -> None:
-    headers = ["Dataset", "BM25", "BGE", "Self-RAG", "HopRAG", "CritHop"]
+    headers = [
+        "Dataset",
+        "BM25",
+        "BGE",
+        "Self-RAG",
+        "HopRAG",
+        "CritHop",
+    ]
+    if any("Phase 2 (reranker-slm)" in item for item in comparison.values()):
+        headers.append("Phase 2 (reranker-slm)")
     print(" | ".join(headers))
     print(" | ".join("---" for _ in headers))
     for dataset_name, methods in comparison.items():
         values = [dataset_name]
         for method in headers[1:]:
-            scores = methods[method]
+            scores = methods.get(method, {"EM": None, "F1": None})
             em = "—" if scores["EM"] is None else f"{scores['EM']:.2f}"
             f1 = "—" if scores["F1"] is None else f"{scores['F1']:.2f}"
             values.append(f"EM={em}, F1={f1}")

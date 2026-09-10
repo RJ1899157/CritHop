@@ -118,10 +118,13 @@ class CritHop:
                 "USE_RERANKER=true, but reranker/reranker.py is not available."
             ) from error
 
-        reranker = Reranker(config=self.config)
-        if not hasattr(reranker, "critique"):
+        adapter_path = self.config.get("reranker_adapter_path")
+        if not adapter_path:
+            raise ValueError("reranker_adapter_path must be set when USE_RERANKER=true")
+        reranker = Reranker(adapter_path=adapter_path)
+        if not hasattr(reranker, "is_relevant"):
             raise TypeError(
-                "Phase 2 Reranker must expose critique(question, "
-                "reasoning_step, passage) -> bool."
+                "Phase 2 Reranker must expose is_relevant(query, passage, "
+                "threshold) -> bool."
             )
         return reranker

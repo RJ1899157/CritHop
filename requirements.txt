@@ -14,3 +14,6 @@ pytest
 httpx
 pyyaml
 torch
+peft
+accelerate
+bitsandbytes

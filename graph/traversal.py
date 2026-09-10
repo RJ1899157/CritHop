@@ -45,11 +45,18 @@ class HopTraverser:
 
             for node_idx in candidate_indices:
                 passage = self.graph.get_passage(node_idx)
-                decisions[node_idx] = self.isrel.critique(
-                    question,
-                    reasoning_step,
-                    passage,
-                )
+                if hasattr(self.isrel, "is_relevant"):
+                    decisions[node_idx] = self.isrel.is_relevant(
+                        reasoning_step,
+                        passage,
+                        threshold=float(self.config.get("isrel_threshold", 0.7)),
+                    )
+                else:
+                    decisions[node_idx] = self.isrel.critique(
+                        question,
+                        reasoning_step,
+                        passage,
+                    )
 
             relevant_indices = [
                 node_idx
