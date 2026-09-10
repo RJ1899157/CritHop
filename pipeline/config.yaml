@@ -1,0 +1,14 @@
+model: openai/gpt-oss-120b
+embedding_model: BAAI/bge-base-en-v1.5
+# CPU avoids exhausting unified memory on Macs during full evaluation.
+embedding_device: cpu
+max_hops: 3
+top_k_retrieval: 10
+top_k_after_isrel: 5
+top_k_after_issup: 3
+isrel_threshold: 0.7
+issup_threshold: 0.7
+isuse_threshold: 0.7
+datasets: [hotpotqa, musique, 2wikimultihopqa]
+eval_samples: 500
+reranker_adapter_path: reranker/adapter/

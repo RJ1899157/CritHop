@@ -1,0 +1,16 @@
+datasets
+transformers
+sentence-transformers
+rank_bm25
+fastapi
+uvicorn
+groq
+pydantic
+numpy
+pandas
+tqdm
+python-dotenv
+pytest
+httpx
+pyyaml
+torch

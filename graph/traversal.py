@@ -1,0 +1,130 @@
+"""HopRAG-style traversal over a semantic passage graph."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from critique.isrel import IsRel
+from graph.builder import PassageGraph
+
+
+class HopTraverser:
+    """Traverse relevant neighboring passages across multiple reasoning hops."""
+
+    def __init__(
+        self,
+        graph: PassageGraph,
+        config: dict,
+        groq_client,
+        isrel: IsRel,
+    ):
+        self.graph = graph
+        self.config = config
+        self.groq_client = groq_client
+        self.isrel = isrel
+        self.model = config.get("model", "openai/gpt-oss-120b")
+        self.hop_log: list[dict[str, Any]] = []
+
+    def traverse(
+        self,
+        question: str,
+        start_passages: list[int],
+    ) -> list[str]:
+        """Traverse relevant passages and record every hop decision."""
+        max_hops = int(self.config.get("max_hops", 3))
+        top_k = int(self.config.get("top_k_after_isrel", 5))
+        reasoning_step = question
+        current_nodes = list(dict.fromkeys(start_passages))
+        surviving_indices: list[int] = []
+        self.hop_log = []
+
+        for hop_number in range(max_hops):
+            candidate_indices = self._neighbor_candidates(current_nodes)
+            decisions: dict[int, bool] = {}
+
+            for node_idx in candidate_indices:
+                passage = self.graph.get_passage(node_idx)
+                decisions[node_idx] = self.isrel.critique(
+                    question,
+                    reasoning_step,
+                    passage,
+                )
+
+            relevant_indices = [
+                node_idx
+                for node_idx in candidate_indices
+                if decisions[node_idx]
+            ][:top_k]
+
+            hop_entry = {
+                "hop": hop_number + 1,
+                "passages_considered": candidate_indices,
+                "isrel_decisions": decisions,
+                "reasoning_step": reasoning_step,
+            }
+            self.hop_log.append(hop_entry)
+
+            if not relevant_indices:
+                break
+
+            surviving_indices.extend(relevant_indices)
+            next_reasoning_step, next_node = self._choose_next_hop(
+                question,
+                reasoning_step,
+                relevant_indices,
+            )
+            reasoning_step = next_reasoning_step
+            current_nodes = [next_node] if next_node is not None else relevant_indices
+
+            self.hop_log[-1]["selected_passages"] = relevant_indices
+            self.hop_log[-1]["next_node"] = next_node
+            self.hop_log[-1]["llm_reasoning_step"] = reasoning_step
+
+        ordered_unique_indices = list(dict.fromkeys(surviving_indices))
+        return [self.graph.get_passage(idx) for idx in ordered_unique_indices]
+
+    def _neighbor_candidates(self, current_nodes: list[int]) -> list[int]:
+        candidates: list[int] = []
+        for node_idx in current_nodes:
+            for neighbor_idx in self.graph.get_neighbors(node_idx):
+                if neighbor_idx not in candidates:
+                    candidates.append(neighbor_idx)
+        return candidates
+
+    def _choose_next_hop(
+        self,
+        question: str,
+        reasoning_step: str,
+        relevant_indices: list[int],
+    ) -> tuple[str, int | None]:
+        passages = "\n".join(
+            f"[{idx}] {self.graph.get_passage(idx)}"
+            for idx in relevant_indices
+        )
+        prompt = (
+            "Given the question, current reasoning step, and relevant passages, "
+            "produce the next reasoning step and choose the next passage to hop "
+            "to. Return only valid JSON with keys `reasoning_step` and "
+            "`passage_index`.\n\n"
+            f"Question: {question}\n"
+            f"Current reasoning step: {reasoning_step}\n"
+            f"Relevant passages:\n{passages}"
+        )
+        response = self.groq_client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=150,
+        )
+        content = response.choices[0].message.content.strip()
+
+        try:
+            parsed = json.loads(content)
+            next_step = str(parsed["reasoning_step"])
+            passage_index = int(parsed["passage_index"])
+            if passage_index not in relevant_indices:
+                passage_index = None
+            return next_step, passage_index
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return content, None

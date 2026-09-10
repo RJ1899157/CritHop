@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(16, 185, 129, 0.12), transparent 30rem),
+    radial-gradient(circle at 85% 20%, rgba(139, 92, 246, 0.1), transparent 32rem),
+    #020617;
+}
