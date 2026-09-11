@@ -118,7 +118,10 @@ class CritHop:
                 "USE_RERANKER=true, but reranker/reranker.py is not available."
             ) from error
 
-        adapter_path = self.config.get("reranker_adapter_path")
+        adapter_path = os.getenv(
+            "RERANKER_ADAPTER_PATH",
+            self.config.get("reranker_adapter_path"),
+        )
         if not adapter_path:
             raise ValueError("reranker_adapter_path must be set when USE_RERANKER=true")
         reranker = Reranker(adapter_path=adapter_path)
