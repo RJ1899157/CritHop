@@ -10,5 +10,7 @@ isrel_threshold: 0.7
 issup_threshold: 0.7
 isuse_threshold: 0.7
 datasets: [hotpotqa, musique, 2wikimultihopqa]
-eval_samples: 500
+eval_samples: 50
+groq_rpm_buffer: 3.0
+max_retries: 5
 reranker_adapter_path: /Users/rishabhjain/Desktop/reranker-slm/model/adapter

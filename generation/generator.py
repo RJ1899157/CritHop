@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from critique.isuse import IsUse
 from critique.issup import IsSup
+from utils.llm_client import call_llm
 
 
 class Generator:
@@ -66,9 +67,9 @@ class Generator:
             f"Context: {context}\n"
             "Answer:"
         )
-        response = self.groq_client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
+        return call_llm(
+            self.groq_client,
+            self.model,
+            [{"role": "user", "content": prompt}],
+            num_predict=128,
         )
-        return response.choices[0].message.content.strip()

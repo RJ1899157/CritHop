@@ -2,7 +2,10 @@
 .DS_Store
 .venv/
 __pycache__/
+**/__pycache__/
 *.py[cod]
+*.pyc
+.cache/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -15,6 +18,8 @@ frontend/out/
 data/raw/
 data/processed/
 data/indexes/
+data/splits/
 checkpoints/
 logs/
 *.log
+reranker/adapter/

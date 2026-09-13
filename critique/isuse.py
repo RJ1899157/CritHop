@@ -7,6 +7,7 @@ import os
 from groq import Groq
 
 from critique.prompts import ISUSE_PROMPT
+from utils.llm_client import call_llm
 
 
 class IsUse:
@@ -32,14 +33,14 @@ class IsUse:
             answer=answer,
         )
 
-        for _ in range(3):
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=3,
-            )
-            decision = response.choices[0].message.content.strip().upper()
+        for attempt in range(3):
+            decision = call_llm(
+                self.client,
+                self.model,
+                [{"role": "user", "content": prompt}],
+                use_cache=attempt == 0,
+                num_predict=8,
+            ).upper()
             if decision == "YES":
                 return True
             if decision == "NO":

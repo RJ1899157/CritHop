@@ -61,7 +61,7 @@ HopRAG contributes logic-aware passage traversal, while Self-RAG contributes ref
 
 ## Results
 
-The published HopRAG values below come from its GPT-4o, top-20-passage Table 2 setting. CritHop values must be generated with the local evaluation scripts; they are intentionally not filled with estimates.
+The published HopRAG values below come from its GPT-4o, top-20-passage Table 2 setting. CritHop values below are the completed 50-sample local run recorded in `eval/results/comparison_table.json`; baselines used 500 samples, so this is a smoke-scale comparison rather than a matched benchmark.
 
 | Method | HotpotQA EM / F1 | MuSiQue EM / F1 | 2WikiMultiHopQA EM / F1 | NDCG@10 |
 |---|---:|---:|---:|---:|
@@ -69,10 +69,10 @@ The published HopRAG values below come from its GPT-4o, top-20-passage Table 2 s
 | BGE (HopRAG Table 2) | 47.60 / 60.36 | 20.80 / 30.10 | 40.10 / 44.96 | generated locally |
 | Self-RAG | not reported in this setting | not reported | not reported | not reported |
 | HopRAG | 62.00 / 76.06 | 42.20 / 54.90 | 61.10 / 68.26 | not reported |
-| CritHop Phase 1 | pending evaluation | pending evaluation | pending evaluation | pending evaluation |
-| CritHop Phase 2 (reranker-slm) | pending evaluation | pending evaluation | pending evaluation | pending evaluation |
+| CritHop observed run | 2.00 / 24.40 | 2.00 / 11.01 | 10.00 / 27.75 | 0.820 / 0.599 / 0.000 |
+| CritHop Phase 2 (reranker-slm), recorded datasets | not recorded | 2.00 / 11.01 | 10.00 / 27.75 | 0.599 / 0.000 |
 
-The Phase 2 EM/F1 and NDCG@10 delta should be taken from `eval/results/comparison_table.json` after both evaluation runs complete under the same sample and model settings.
+The Phase 1-versus-Phase 2 delta is not claimed here because a matched Phase 1 and Phase 2 run was not recorded for every dataset. Run both modes with the same sample count before reporting that delta.
 
 ## Setup
 

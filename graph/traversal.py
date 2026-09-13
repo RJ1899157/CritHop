@@ -7,6 +7,7 @@ from typing import Any
 
 from critique.isrel import IsRel
 from graph.builder import PassageGraph
+from utils.llm_client import call_llm
 
 
 class HopTraverser:
@@ -118,13 +119,12 @@ class HopTraverser:
             f"Current reasoning step: {reasoning_step}\n"
             f"Relevant passages:\n{passages}"
         )
-        response = self.groq_client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=150,
+        content = call_llm(
+            self.groq_client,
+            self.model,
+            [{"role": "user", "content": prompt}],
+            num_predict=64,
         )
-        content = response.choices[0].message.content.strip()
 
         try:
             parsed = json.loads(content)

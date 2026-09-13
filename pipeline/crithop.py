@@ -15,6 +15,7 @@ from critique.isuse import IsUse
 from generation.generator import Generator
 from graph.builder import PassageGraph
 from graph.traversal import HopTraverser
+from llm.openai_compatible_client import OpenAICompatibleClient
 from retrieval.bge_retriever import BGERetriever
 from retrieval.bm25_retriever import BM25Retriever
 from retrieval.hybrid import HybridRetriever
@@ -29,11 +30,29 @@ class CritHop:
         with config_file.open("r", encoding="utf-8") as file:
             self.config = yaml.safe_load(file) or {}
 
-        self.model = self.config.get("model", "openai/gpt-oss-120b")
-        self.groq_client = Groq(
-            api_key=os.getenv("GROQ_API_KEY"),
-            timeout=30.0,
-            max_retries=0,
+        provider = os.getenv("LLM_PROVIDER", "groq").lower()
+        self.model = (
+            os.getenv("HIRO_MODEL", "")
+            if provider == "hiro"
+            else self.config.get("model", "openai/gpt-oss-120b")
+        )
+        self.groq_client = (
+            None
+            if provider == "local"
+            else OpenAICompatibleClient(
+                os.getenv("HIRO_API_KEY"),
+                os.getenv("HIRO_BASE_URL"),
+                self.model,
+                request_interval=float(
+                    os.getenv("HIRO_REQUEST_INTERVAL", "0")
+                ),
+            )
+            if provider == "hiro"
+            else Groq(
+                api_key=os.getenv("GROQ_API_KEY"),
+                timeout=30.0,
+                max_retries=0,
+            )
         )
         self.isrel = self._create_isrel()
         self.issup = IsSup(model=self.model, client=self.groq_client)
