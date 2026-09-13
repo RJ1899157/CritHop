@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import AnswerCard from "@/components/AnswerCard";
@@ -8,18 +8,114 @@ import CritiquePanel from "@/components/CritiquePanel";
 import HopTrace from "@/components/HopTrace";
 import type { QueryResult } from "@/lib/api";
 
+const SAMPLE_RESULT: QueryResult = {
+  question: "Were Scott Derrickson and Ed Wood of the same nationality?",
+  answer: "Yes. Both Scott Derrickson and Ed Wood are American.",
+  hop_trace: [
+    {
+      hop: 1,
+      passages_considered: [3, 4, 5, 6, 7, 9, 0, 1, 8],
+      isrel_decisions: { "3": false, "4": false, "5": false, "6": false, "7": false, "9": false, "0": false, "1": false, "8": false },
+      reasoning_step: "Were Scott Derrickson and Ed Wood of the same nationality?",
+      selected_passages: [1],
+      next_node: null,
+      llm_reasoning_step: "Find Ed Wood's nationality in the next passage and compare it to Scott Derrickson's nationality (American) to determine if they share the same nationality."
+    },
+    {
+      hop: 2,
+      passages_considered: [3, 4, 5, 6, 7, 9],
+      isrel_decisions: { "3": false, "4": false, "5": false, "6": false, "7": false, "9": false },
+      reasoning_step: "Find Ed Wood's nationality in the next passage and compare it to Scott Derrickson's nationality (American) to determine if they share the same nationality.",
+      selected_passages: [4],
+      next_node: 4,
+      llm_reasoning_step: "Identify Ed Wood's nationality from passage 4 (American) and compare it to Scott Derrickson's nationality (American) to see if they match."
+    },
+    {
+      hop: 3,
+      passages_considered: [0, 1, 8],
+      isrel_decisions: { "0": false, "1": false, "8": false },
+      reasoning_step: "Identify Ed Wood's nationality from passage 4 (American) and compare it to Scott Derrickson's nationality (American) to see if they match.",
+      selected_passages: [0],
+      next_node: null,
+      llm_reasoning_step: "Locate Ed Wood's nationality in passage 4 to determine if it matches Scott Derrickson's nationality."
+    }
+  ],
+  critique_log: {
+    isrel_decisions: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+    issup_decisions: [true, true, true],
+    isuse_decision: true
+  },
+  supporting_passages: [
+    "Scott Derrickson: Scott Derrickson (born July 16, 1966) is an American director, screenwriter and producer. He lives in Los Angeles, California. He is best known for directing horror films such as \"Sinister\", \"The Exorcism of Emily Rose\", and \"Deliver Us From Evil\", as well as the 2016 Marvel Cinematic Universe installment, \"Doctor Strange.\"",
+    "Ed Wood: Edward Davis Wood Jr. (October 10, 1924 – December 10, 1978) was an American filmmaker, actor, writer, producer, and director.",
+    "Ed Wood (film): Ed Wood is a 1994 American biographical period comedy-drama film directed and produced by Tim Burton, and starring Johnny Depp as cult filmmaker Ed Wood."
+  ],
+  retrieval_retry: false
+};
+
 export default function ResultsPage() {
-  const [result] = useState<QueryResult | null>(() => {
-    if (typeof window === "undefined") return null;
-    const stored = sessionStorage.getItem("crithop-result");
-    return stored ? (JSON.parse(stored) as QueryResult) : null;
-  });
+  const [result, setResult] = useState<QueryResult | null>(null);
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+    try {
+      const stored = sessionStorage.getItem("crithop-result");
+      if (stored) {
+        setResult(JSON.parse(stored) as QueryResult);
+      }
+    } catch {
+      // ignore parsing errors
+    }
+  }, []);
+
+  function loadSample() {
+    setResult(SAMPLE_RESULT);
+    sessionStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
+  }
+
+  if (!hasMounted) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-6">
+        <div className="flex items-center gap-3 text-sm text-slate-400">
+          <svg className="h-5 w-5 animate-spin text-emerald-400" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          Loading result...
+        </div>
+      </main>
+    );
+  }
 
   if (!result) {
     return (
       <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
-        <p className="text-sm text-slate-400">No query result found.</p>
-        <Link href="/" className="mt-5 rounded-full bg-emerald-400 px-5 py-2 text-sm font-semibold text-slate-950">Run a query</Link>
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-slate-400">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="mt-4 text-lg font-semibold text-white">No active query in session</h2>
+          <p className="mt-2 max-w-sm text-sm text-slate-400">
+            Submit a multi-hop question on the query page, or load a pre-computed sample result to inspect the reasoning path and critique signals.
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <button
+              onClick={loadSample}
+              className="rounded-2xl border border-emerald-400/40 bg-emerald-400/15 px-5 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/25"
+            >
+              Load Sample Result
+            </button>
+            <Link
+              href="/"
+              className="rounded-2xl bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+            >
+              Run a Query
+            </Link>
+          </div>
+        </div>
       </main>
     );
   }
@@ -28,17 +124,39 @@ export default function ResultsPage() {
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12">
       <div className="mb-10 flex flex-wrap items-end justify-between gap-5">
         <div>
-          <Link href="/" className="text-sm text-emerald-300 hover:text-emerald-200">← New query</Link>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Question</p>
-          <h1 className="mt-2 max-w-4xl text-3xl font-semibold tracking-tight text-white">{result.question}</h1>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 transition hover:text-emerald-300"
+          >
+            ← Ask another question
+          </Link>
+          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+            Question
+          </p>
+          <h1 className="mt-2 max-w-4xl text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            {result.question}
+          </h1>
         </div>
-        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-400">
+        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-xs text-slate-300">
           {result.retrieval_retry ? "Fallback retrieval used" : "Initial retrieval accepted"}
         </span>
       </div>
+
       <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
-        <div className="space-y-6"><AnswerCard answer={result.answer} supportingPassages={result.supporting_passages} /><HopTrace hopTrace={result.hop_trace} /></div>
-        <CritiquePanel isrelDecisions={result.critique_log.isrel_decisions} issupDecisions={result.critique_log.issup_decisions} isuseDecision={result.critique_log.isuse_decision} />
+        <div className="space-y-6">
+          <AnswerCard
+            answer={result.answer}
+            supportingPassages={result.supporting_passages ?? []}
+          />
+          <HopTrace hopTrace={result.hop_trace ?? []} />
+        </div>
+        <div>
+          <CritiquePanel
+            isrelDecisions={result.critique_log?.isrel_decisions ?? []}
+            issupDecisions={result.critique_log?.issup_decisions ?? []}
+            isuseDecision={result.critique_log?.isuse_decision ?? false}
+          />
+        </div>
       </div>
     </main>
   );

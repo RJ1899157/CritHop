@@ -130,21 +130,25 @@ docker compose down
 
 ## Run a query
 
-### Web UI
+### Web UI (Interactive Frontend)
 
-Open http://localhost:3000.
-1. Select a dataset from the dropdown (**HotpotQA**, **MuSiQue**, or **2WikiMultiHopQA**).
-2. Type any multi-hop question or click one of the suggested sample question pills.
-3. Click **"Run CritHop"**. CritHop automatically indexes and resolves the ground-truth context passages server-side from `data/splits/`.
-4. Inspect the generated answer, multi-hop reasoning trace, critique gate logs (IsREL, IsSUP, IsUSE), and grounded supporting passages.
+Open **http://localhost:3000** (or **http://127.0.0.1:3000**) in your browser:
+1. Select a benchmark dataset from the dropdown (**HotpotQA**, **MuSiQue**, or **2WikiMultiHopQA**).
+2. Click any of the pre-loaded quick test samples, or enter your own multi-hop question. (No manual context pasting is needed; passages are resolved automatically server-side from pre-indexed splits).
+3. Click **"Run CritHop"**. The button displays real-time pipeline status (*retrieval, graph traversal, neural SLM IsREL pruning, self-reflection checks, answer generation*).
+4. View the results directly below the query box:
+   - **Grounded Response Card:** Final synthesized answer with cited supporting passages.
+   - **Interactive HopTrace:** Step-by-step multi-hop reasoning path, passages considered, and hop decisions.
+   - **Critique Signals Panel:** Self-reflection decisions for IsREL, IsSUP, and IsUSE.
+5. Click **"Dedicated Page ↗"** or **"Results"** in the navbar to view or share the dedicated results page at `/results`.
 
 ### Evaluation Showcase
 
-Visit http://localhost:3000/eval or click **Evaluation Showcase** in the navbar to view the full benchmark comparison:
-- Side-by-side comparison across **HotpotQA**, **MuSiQue**, and **2WikiMultiHopQA** on Exact Match (EM) and F1 metrics.
-- Benchmark baselines from published literature (**BM25**, **BGE**, **Self-RAG**, **HopRAG**) shown in muted grey.
-- **CritHop Phase 1** (Prompted LLM) and **CritHop Phase 2** (Trained `reranker-slm` LoRA adapter) highlighted in emerald green.
-- One-click **"Run Evaluation"** button to trigger evaluation runs and refresh the comparison table.
+Visit **http://localhost:3000/eval** or click **Evaluation Showcase** in the navbar:
+- **Benchmark Comparison Table:** Exact Match (EM) and F1 across **HotpotQA**, **MuSiQue**, and **2WikiMultiHopQA**.
+- **Research Baselines:** Published scores from **BM25**, **BGE**, **Self-RAG**, and **HopRAG** displayed for direct comparison.
+- **CritHop Highlights:** **CritHop Phase 1** (Prompted LLM) and **CritHop Phase 2** (Trained `reranker-slm` QLoRA adapter) highlighted in emerald green.
+- **"Run Evaluation" Button:** Triggers background benchmark execution with live polling and updates.
 
 ### API
 

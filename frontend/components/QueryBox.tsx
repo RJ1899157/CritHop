@@ -1,9 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { queryCritHop } from "@/lib/api";
+import { queryCritHop, type QueryResult } from "@/lib/api";
 
 const SAMPLE_QUESTIONS: Record<string, string[]> = {
   hotpotqa: [
@@ -21,12 +21,37 @@ const SAMPLE_QUESTIONS: Record<string, string[]> = {
   ],
 };
 
-export default function QueryBox() {
+const LOADING_STAGES = [
+  "Retrieving initial evidence via BM25 + BGE...",
+  "Building semantic passage graph...",
+  "Traversing multi-hop reasoning path...",
+  "Phase 2 SLM IsREL critique & pruning...",
+  "Evaluating support signals (IsSUP)...",
+  "Synthesizing and critiquing grounded answer...",
+];
+
+type QueryBoxProps = {
+  onResult?: (result: QueryResult) => void;
+};
+
+export default function QueryBox({ onResult }: QueryBoxProps) {
   const router = useRouter();
   const [question, setQuestion] = useState("");
   const [dataset, setDataset] = useState("hotpotqa");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStageIdx, setLoadingStageIdx] = useState(0);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingStageIdx(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setLoadingStageIdx((prev) => (prev + 1) % LOADING_STAGES.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [isLoading]);
 
   const samples = SAMPLE_QUESTIONS[dataset] || [];
 
@@ -44,12 +69,16 @@ export default function QueryBox() {
     try {
       const result = await queryCritHop(normalizedQuestion, dataset);
       sessionStorage.setItem("crithop-result", JSON.stringify(result));
-      router.push("/results");
+      if (onResult) {
+        onResult(result);
+      } else {
+        router.push("/results");
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "The CritHop API could not be reached.",
+          : "The CritHop API could not be reached. Ensure the backend container is running on port 8000.",
       );
     } finally {
       setIsLoading(false);
@@ -70,7 +99,8 @@ export default function QueryBox() {
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="Ask a multi-hop question or select a sample below..."
-          className="min-h-24 w-full resize-y rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-400/20"
+          rows={3}
+          className="w-full resize-y rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-400/20"
         />
       </div>
 
@@ -114,23 +144,29 @@ export default function QueryBox() {
       )}
 
       {error && (
-        <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-          {error}
-        </p>
+        <div className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-xs leading-5 text-red-200">
+          <p className="font-semibold">Query Failed:</p>
+          <p>{error}</p>
+        </div>
       )}
 
       <button
         type="submit"
         disabled={isLoading}
-        className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 shadow-lg shadow-emerald-500/10"
+        className="inline-flex w-full flex-col items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-75 shadow-lg shadow-emerald-500/10"
       >
         {isLoading ? (
-          <span className="flex items-center gap-2">
-            <svg className="h-4 w-4 animate-spin text-slate-950" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            Traversing evidence graph...
+          <span className="flex flex-col items-center gap-1.5 py-0.5">
+            <span className="flex items-center gap-2">
+              <svg className="h-4 w-4 animate-spin text-slate-950" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Traversing evidence graph...
+            </span>
+            <span className="text-[11px] font-normal text-slate-800">
+              {LOADING_STAGES[loadingStageIdx]}
+            </span>
           </span>
         ) : (
           "Run CritHop"

@@ -24,9 +24,9 @@ function DecisionBadge({ label, value }: { label: string; value: boolean }) {
 }
 
 export default function CritiquePanel({
-  isrelDecisions,
-  issupDecisions,
-  isuseDecision,
+  isrelDecisions = [],
+  issupDecisions = [],
+  isuseDecision = false,
 }: CritiquePanelProps) {
   return (
     <section className="rounded-3xl border border-white/10 bg-white/[0.06] p-6 backdrop-blur">
