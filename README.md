@@ -20,7 +20,6 @@
   <img src="https://img.shields.io/badge/Beats_HopRAG-+4.2_EM-10B981?style=flat-square" alt="HopRAG" />
   <img src="https://img.shields.io/badge/Beats_Self--RAG-+28.1_EM-10B981?style=flat-square" alt="Self-RAG" />
   <img src="https://img.shields.io/badge/Latency-8.5s–12.3s-10B981?style=flat-square" alt="Latency" />
-  <img src="https://img.shields.io/badge/License-Research-blue?style=flat-square" alt="License" />
 </p>
 
 <br/>
@@ -361,10 +360,4 @@ RERANKER_ADAPTER_PATH=/opt/reranker-slm/model/adapter
 | **MuSiQue** — Single-hop Question Composition | TACL 2022 |
 | **2WikiMultiHopQA** — Evidence Paths for Multi-hop QA | COLING 2020 |
 
-<br/>
 
----
-
-<p align="center">
-  <sub>Built for research, education, and portfolio demonstration.</sub>
-</p>
