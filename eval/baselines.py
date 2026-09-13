@@ -47,7 +47,7 @@ def _flatten_context(context: Any) -> list[str]:
         for item in context:
             if isinstance(item, dict):
                 title = item.get("title", "")
-                text = item.get("text", item.get("paragraph", ""))
+                text = item.get("paragraph_text", item.get("text", item.get("paragraph", "")))
                 passages.append(f"{title}: {text}".strip(": "))
             elif isinstance(item, list):
                 passages.append(" ".join(map(str, item)))

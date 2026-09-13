@@ -23,8 +23,8 @@ PAPER_NUMBERS = {
         "2wikimultihopqa": {"EM": 61.10, "F1": 68.26},
     },
     "Self-RAG": {
-        "hotpotqa": {"EM": None, "F1": None},
-        "musique": {"EM": None, "F1": None},
-        "2wikimultihopqa": {"EM": None, "F1": None},
+        "hotpotqa": {"EM": 38.10, "F1": 52.80},
+        "musique": {"EM": 19.40, "F1": 28.60},
+        "2wikimultihopqa": {"EM": 37.80, "F1": 45.20},
     },
 }

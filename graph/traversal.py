@@ -49,15 +49,23 @@ class HopTraverser:
         for hop_number in range(max_hops):
             print(f"HopTraverser starting hop {hop_number + 1}")
             candidate_indices = self._neighbor_candidates(current_nodes)
+            if hop_number == 0:
+                for n_idx in current_nodes:
+                    if n_idx not in candidate_indices:
+                        candidate_indices.append(n_idx)
             decisions: dict[int, bool] = {}
 
             if self.reranker is not None:
-                threshold = float(self.config.get("isrel_threshold", 0.7))
+                threshold = float(self.config.get("isrel_threshold", 0.35))
                 passages = [self.graph.get_passage(node_idx) for node_idx in candidate_indices]
                 if hasattr(self.reranker, "_scores"):
                     scores = self.reranker._scores(question, passages)
                     for node_idx, score in zip(candidate_indices, scores):
                         decisions[node_idx] = bool(score >= threshold)
+                    if not any(decisions.values()) and scores:
+                        ranked_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:2]
+                        for r_idx in ranked_indices:
+                            decisions[candidate_indices[r_idx]] = True
                 else:
                     for node_idx, passage in zip(candidate_indices, passages):
                         decisions[node_idx] = self.reranker.is_relevant(
@@ -66,15 +74,25 @@ class HopTraverser:
                             threshold=threshold,
                         )
             else:
-                for node_idx in candidate_indices:
-                    passage = self.graph.get_passage(node_idx)
-                    if hasattr(self.isrel, "is_relevant"):
+                passages = [self.graph.get_passage(node_idx) for node_idx in candidate_indices]
+                if hasattr(self.isrel, "batch_critique"):
+                    batch_decisions = self.isrel.batch_critique(
+                        question,
+                        reasoning_step,
+                        passages,
+                    )
+                    for node_idx, dec in zip(candidate_indices, batch_decisions):
+                        decisions[node_idx] = dec
+                elif hasattr(self.isrel, "is_relevant"):
+                    for node_idx, passage in zip(candidate_indices, passages):
                         decisions[node_idx] = self.isrel.is_relevant(
                             question,
                             passage,
                             threshold=float(self.config.get("isrel_threshold", 0.7)),
                         )
-                    else:
+                else:
+                    for node_idx in candidate_indices:
+                        passage = self.graph.get_passage(node_idx)
                         decisions[node_idx] = self.isrel.critique(
                             question,
                             reasoning_step,
@@ -133,6 +151,12 @@ class HopTraverser:
             self.hop_log[-1]["selected_passages"] = relevant_indices
             self.hop_log[-1]["next_node"] = next_node
             self.hop_log[-1]["llm_reasoning_step"] = reasoning_step
+
+            # Early termination: if sufficient multi-hop evidence gathered
+            if hop_number >= 1 and len(set(surviving_indices)) >= 2:
+                if next_node is None or next_node in surviving_indices:
+                    print(f"HopTraverser early termination at hop {hop_number + 1}: sufficient evidence gathered")
+                    break
 
         if self.reranker is not None:
             print(

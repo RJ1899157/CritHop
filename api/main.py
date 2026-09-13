@@ -141,9 +141,170 @@ app.add_middleware(
 )
 
 
+QUESTION_BANK = {
+    "hotpotqa": [
+        {
+            "id": "hotpotqa-1",
+            "question": "Were Scott Derrickson and Ed Wood of the same nationality?",
+            "answer": "yes",
+            "category": "Comparison Reasoning",
+            "difficulty": "2 Hops",
+            "reasoning": "Identify nationality of Scott Derrickson (American) and Ed Wood (American), then verify equivalence."
+        },
+        {
+            "id": "hotpotqa-2",
+            "question": "What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?",
+            "answer": "Chief of Protocol",
+            "category": "Bridge Entity",
+            "difficulty": "2 Hops",
+            "reasoning": "Identify actress who portrayed Corliss Archer (Shirley Temple), then retrieve her diplomatic position."
+        },
+        {
+            "id": "hotpotqa-3",
+            "question": "What science fantasy young adult series, told in first person, has a set of companion books narrating the stories of enslaved worlds and alien species?",
+            "answer": "Animorphs",
+            "category": "Bridge Property",
+            "difficulty": "2 Hops",
+            "reasoning": "Identify the YA sci-fi series with alien companion chronicles (Animorphs)."
+        },
+        {
+            "id": "hotpotqa-4",
+            "question": "Are the Laleli Mosque and Esma Sultan Mansion located in the same neighborhood?",
+            "answer": "no",
+            "category": "Spatial Comparison",
+            "difficulty": "2 Hops",
+            "reasoning": "Locate Laleli Mosque (Fatih) and Esma Sultan Mansion (Ortaköy), then verify neighborhoods differ."
+        },
+        {
+            "id": "hotpotqa-5",
+            "question": "The director of the romantic comedy \"Big Stone Gap\" is based in what New York city?",
+            "answer": "Greenwich Village, New York City",
+            "category": "Compositional",
+            "difficulty": "2 Hops",
+            "reasoning": "Find director of 'Big Stone Gap' (Adriana Trigiani), then retrieve her New York residence."
+        },
+    ],
+    "musique": [
+        {
+            "id": "musique-1",
+            "question": "Who is the spouse of the Green performer?",
+            "answer": "Miquette Giraudy",
+            "category": "Compositional",
+            "difficulty": "2 Hops",
+            "reasoning": "Find the artist behind album Green (Steve Hillage), then find his spouse."
+        },
+        {
+            "id": "musique-2",
+            "question": "Who founded the company that distributed the film UHF?",
+            "answer": "Mike Medavoy",
+            "category": "Multi-hop Founder",
+            "difficulty": "3 Hops",
+            "reasoning": "Find distributor of UHF (Orion Pictures), then find who founded Orion Pictures."
+        },
+        {
+            "id": "musique-3",
+            "question": "What administrative territorial entity is the owner of Ciudad Deportiva located?",
+            "answer": "Tamaulipas",
+            "category": "Geographical",
+            "difficulty": "2 Hops",
+            "reasoning": "Locate Ciudad Deportiva's owning municipality, then determine its state/territory."
+        },
+        {
+            "id": "musique-4",
+            "question": "Where is Ulrich Walter's employer headquartered?",
+            "answer": "Cologne",
+            "category": "Bridge Entity",
+            "difficulty": "2 Hops",
+            "reasoning": "Identify Ulrich Walter's employer (German Aerospace Center DLR), then find its headquarters."
+        },
+        {
+            "id": "musique-5",
+            "question": "Which company owns the manufacturer of Learjet 60?",
+            "answer": "Bombardier Inc.",
+            "category": "Hierarchical Ownership",
+            "difficulty": "2 Hops",
+            "reasoning": "Find manufacturer of Learjet 60 (Learjet), then identify its parent corporation."
+        },
+        {
+            "id": "musique-6",
+            "question": "Who is the child of Caroline LeRoy's spouse?",
+            "answer": "Fletcher Webster",
+            "category": "Genealogical Bridge",
+            "difficulty": "2 Hops",
+            "reasoning": "Determine Caroline LeRoy's spouse (Daniel Webster), then identify their child."
+        },
+    ],
+    "2wikimultihopqa": [
+        {
+            "id": "2wiki-1",
+            "question": "Who is the mother of the director of film Polish-Russian War (Film)?",
+            "answer": "Małgorzata Braunek",
+            "category": "Bridge Entity",
+            "difficulty": "2 Hops",
+            "reasoning": "Identify director of Polish-Russian War (Xawery Żuławski), then retrieve his mother."
+        },
+        {
+            "id": "2wiki-2",
+            "question": "Which film came out first, Blind Shaft or The Mask Of Fu Manchu?",
+            "answer": "The Mask Of Fu Manchu",
+            "category": "Temporal Comparison",
+            "difficulty": "2 Hops",
+            "reasoning": "Retrieve release dates of Blind Shaft (2003) and The Mask Of Fu Manchu (1932), compare."
+        },
+        {
+            "id": "2wiki-3",
+            "question": "When did John V, Prince Of Anhalt-Zerbst's father die?",
+            "answer": "12 June 1516",
+            "category": "Temporal Bridge",
+            "difficulty": "2 Hops",
+            "reasoning": "Identify father of John V (Ernest I, Prince of Anhalt-Dessau), then retrieve death date."
+        },
+        {
+            "id": "2wiki-4",
+            "question": "What is the award that the director of film Wearing Velvet Slippers Under A Golden Umbrella won?",
+            "answer": "Myanmar Motion Picture Academy Awards",
+            "category": "Compositional",
+            "difficulty": "2 Hops",
+            "reasoning": "Find director of the film, then look up their major national motion picture award."
+        },
+        {
+            "id": "2wiki-5",
+            "question": "Where was the director of film Ronnie Rocket born?",
+            "answer": "Missoula, Montana",
+            "category": "Geographical Bridge",
+            "difficulty": "2 Hops",
+            "reasoning": "Identify director of Ronnie Rocket (David Lynch), then find his birthplace."
+        },
+        {
+            "id": "2wiki-6",
+            "question": "Are North Marion High School (Oregon) and Seoul High School both located in the same country?",
+            "answer": "no",
+            "category": "Spatial Comparison",
+            "difficulty": "2 Hops",
+            "reasoning": "Identify countries (USA vs South Korea), then compare."
+        },
+    ],
+}
+
+
+@app.get("/question-bank")
+def get_question_bank(dataset: str | None = None) -> dict:
+    """Return categorized multi-hop question banks across all supported benchmark datasets."""
+    if dataset:
+        ds_lower = dataset.lower()
+        if ds_lower not in QUESTION_BANK:
+            raise HTTPException(status_code=400, detail=f"Unknown dataset: {dataset}")
+        return {ds_lower: QUESTION_BANK[ds_lower]}
+    return QUESTION_BANK
+
+
 @app.get("/samples/{dataset}")
 def get_sample_questions(dataset: str) -> list[str]:
     """Return sample questions from pre-indexed dataset split for quick testing."""
+    ds_lower = dataset.lower()
+    if ds_lower in QUESTION_BANK:
+        return [item["question"] for item in QUESTION_BANK[ds_lower]]
+
     dataset_dir = SPLITS_PATH / dataset
     samples = []
     if dataset_dir.exists():

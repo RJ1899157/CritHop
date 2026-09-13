@@ -6,11 +6,11 @@ max_hops: 3
 top_k_retrieval: 10
 top_k_after_isrel: 5
 top_k_after_issup: 3
-isrel_threshold: 0.7
-issup_threshold: 0.7
-isuse_threshold: 0.7
+isrel_threshold: 0.35
+issup_threshold: 0.5
+isuse_threshold: 0.5
 datasets: [hotpotqa, musique, 2wikimultihopqa]
 eval_samples: 50
-groq_rpm_buffer: 3.0
+groq_rpm_buffer: 0.5
 max_retries: 5
 reranker_adapter_path: /Users/rishabhjain/Desktop/reranker-slm/model/adapter

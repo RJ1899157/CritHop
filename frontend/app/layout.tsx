@@ -25,6 +25,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link href="/" className="px-2 py-1 text-slate-400 hover:text-white transition">
                 Query
               </Link>
+              <Link href="/questions" className="px-2 py-1 text-slate-400 hover:text-white transition">
+                Question Bank
+              </Link>
               <Link href="/results" className="px-2 py-1 text-slate-400 hover:text-white transition">
                 Results
               </Link>

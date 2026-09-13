@@ -7,11 +7,15 @@ import QueryBox from "@/components/QueryBox";
 import AnswerCard from "@/components/AnswerCard";
 import CritiquePanel from "@/components/CritiquePanel";
 import HopTrace from "@/components/HopTrace";
+import QuestionBank from "@/components/QuestionBank";
 import type { QueryResult } from "@/lib/api";
 
 export default function HomePage() {
   const [result, setResult] = useState<QueryResult | null>(null);
+  const [selectedQ, setSelectedQ] = useState("");
+  const [selectedDs, setSelectedDs] = useState("hotpotqa");
   const resultsRef = useRef<HTMLDivElement>(null);
+  const queryBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -31,8 +35,14 @@ export default function HomePage() {
     }, 100);
   }
 
+  function handleSelectFromBank(q: string, ds: string) {
+    setSelectedQ(q);
+    setSelectedDs(ds);
+    queryBoxRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
+
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-12">
+    <main className="mx-auto min-h-screen max-w-6xl px-6 py-12 space-y-16">
       <div className="grid w-full gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -56,13 +66,17 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
-          <QueryBox onResult={handleResult} />
+        <div ref={queryBoxRef} className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
+          <QueryBox
+            onResult={handleResult}
+            initialQuestion={selectedQ}
+            initialDataset={selectedDs}
+          />
         </div>
       </div>
 
       {result && (
-        <div ref={resultsRef} className="mt-16 border-t border-white/10 pt-12">
+        <div ref={resultsRef} className="border-t border-white/10 pt-12">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -106,6 +120,11 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* Embedded Question Bank Showcase */}
+      <div className="border-t border-white/10 pt-12">
+        <QuestionBank onSelectQuestion={handleSelectFromBank} selectedDataset={selectedDs} />
+      </div>
     </main>
   );
 }

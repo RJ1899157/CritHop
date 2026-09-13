@@ -35,9 +35,10 @@ class _RerankerModel(nn.Module):
 class Reranker:
     """Score query-passage relevance using the trained reranker-slm adapter."""
 
-    def __init__(self, adapter_path: str, max_length: int = 512):
+    def __init__(self, adapter_path: str, max_length: int = 192):
         self.max_length = max_length
         self._first_inference = True
+        self._score_cache: dict[tuple[str, str], float] = {}
         if not adapter_path or not os.path.exists(os.path.expanduser(adapter_path)):
             raise FileNotFoundError(
                 f"Reranker adapter path does not exist: {adapter_path}. "
@@ -100,7 +101,8 @@ class Reranker:
         self.model.eval()
         self._device = model_device
         if self.device == "cpu":
-            torch.set_num_threads(int(os.getenv("TORCH_NUM_THREADS", "2")))
+            num_threads = int(os.getenv("TORCH_NUM_THREADS", str(min(6, os.cpu_count() or 4))))
+            torch.set_num_threads(num_threads)
 
     def _scores(self, query: str, passages: list[str], batch_size: int = 4) -> list[float]:
         if not passages:
@@ -108,9 +110,26 @@ class Reranker:
         if getattr(self, "_first_inference", True):
             print("reranker-slm loaded, running inference")
             self._first_inference = False
-        all_scores: list[float] = []
-        for i in range(0, len(passages), batch_size):
-            batch_passages = passages[i : i + batch_size]
+
+        # Check cache for any previously scored pairs
+        uncached_indices = []
+        uncached_passages = []
+        result_scores = [0.0] * len(passages)
+
+        for idx, passage in enumerate(passages):
+            key = (query, passage)
+            if key in self._score_cache:
+                result_scores[idx] = self._score_cache[key]
+            else:
+                uncached_indices.append(idx)
+                uncached_passages.append(passage)
+
+        if not uncached_passages:
+            return result_scores
+
+        for i in range(0, len(uncached_passages), batch_size):
+            batch_passages = uncached_passages[i : i + batch_size]
+            batch_indices = uncached_indices[i : i + batch_size]
             prompts = [
                 f"[QUERY]: {query}\n[PASSAGE]: {passage}\n"
                 "Is this passage relevant to the query? "
@@ -126,13 +145,17 @@ class Reranker:
             )
             input_ids = tokens["input_ids"].to(self._device)
             attention_mask = tokens["attention_mask"].to(self._device)
-            with torch.no_grad():
+            with torch.inference_mode():
                 output = self.model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                 )
-                all_scores.extend(torch.softmax(output.logits, dim=-1)[:, 1].cpu().tolist())
-        return all_scores
+                batch_scores = torch.softmax(output.logits, dim=-1)[:, 1].cpu().tolist()
+                for orig_idx, passage, score in zip(batch_indices, batch_passages, batch_scores):
+                    result_scores[orig_idx] = score
+                    self._score_cache[(query, passage)] = score
+
+        return result_scores
 
     def rerank(self, query: str, passages: list[str]) -> list[tuple[str, float]]:
         """Return passages sorted by class-1 relevance probability."""

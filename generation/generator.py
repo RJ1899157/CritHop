@@ -1,7 +1,6 @@
-"""Answer generation with support and usefulness critique."""
-
 from __future__ import annotations
 
+import re
 from critique.isuse import IsUse
 from critique.issup import IsSup
 from utils.llm_client import call_llm
@@ -24,11 +23,21 @@ class Generator:
 
     def generate(self, question: str, passages: list[str]) -> dict:
         """Generate a grounded answer and return all critique decisions."""
-        draft = self._call_llm(question, "\n\n".join(passages))
-        issup_scores = [
-            self.issup.critique(question, passage, draft)
-            for passage in passages
-        ]
+        if not passages:
+            return {
+                "answer": "Insufficient information to answer.",
+                "supporting_passages": [],
+                "issup_scores": [],
+                "isuse_score": False,
+                "retrieval_retry": False,
+            }
+
+        # 1. Concise draft from top passages
+        draft = self._call_llm(question, "\n\n".join(passages[:3]))
+        cleaned_draft = self._clean_answer(draft)
+
+        # 2. Batched IsSUP critique (single fast LLM call for all passages)
+        issup_scores = self.issup.batch_critique(question, passages, cleaned_draft)
         supporting_passages = [
             passage
             for passage, is_supported in zip(passages, issup_scores)
@@ -37,19 +46,23 @@ class Generator:
         if not supporting_passages:
             supporting_passages = passages[:3]
 
-        answer = self._call_llm(
-            question,
-            "\n\n".join(supporting_passages),
-        )
+        # 3. Direct reuse if draft is supported, avoiding redundant LLM generation
+        if any(issup_scores) and cleaned_draft:
+            answer = cleaned_draft
+        else:
+            answer = self._clean_answer(
+                self._call_llm(question, "\n\n".join(supporting_passages))
+            )
+
+        # 4. IsUSE critique
         isuse_score = self.isuse.critique(question, answer)
         retrieval_retry = False
 
         if not isuse_score:
             retrieval_retry = True
             fallback_passages = passages[:3]
-            answer = self._call_llm(
-                question,
-                "\n\n".join(fallback_passages),
+            answer = self._clean_answer(
+                self._call_llm(question, "\n\n".join(fallback_passages))
             )
             supporting_passages = fallback_passages
             isuse_score = self.isuse.critique(question, answer)
@@ -64,14 +77,46 @@ class Generator:
 
     def _call_llm(self, question: str, context: str) -> str:
         prompt = (
-            "Answer the question using only the provided context.\n"
+            "You are an expert Question Answering system evaluating multi-hop evidence.\n"
+            "Based ONLY on the provided context passages, answer the question directly.\n"
+            "CRITICAL REQUIREMENT: Output ONLY the concise final answer (such as the name of a person, place, entity, date, number, or 'yes'/'no').\n"
+            "Do NOT provide full sentences, explanations, or phrases like 'Based on the context'.\n\n"
+            f"Context:\n{context}\n\n"
             f"Question: {question}\n"
-            f"Context: {context}\n"
-            "Answer:"
+            "Concise Answer:"
         )
         return call_llm(
             self.groq_client,
             self.model,
             [{"role": "user", "content": prompt}],
-            num_predict=128,
+            num_predict=64,
         )
+
+    @staticmethod
+    def _clean_answer(raw: str) -> str:
+        ans = (raw or "").strip()
+        prefixes = [
+            "concise answer:", "answer:", "final answer:", "the answer is",
+            "based on the context,", "based on the provided context,",
+            "based on the text,", "according to the context,",
+        ]
+        low = ans.lower()
+        for p in prefixes:
+            if low.startswith(p):
+                ans = ans[len(p):].strip()
+                low = ans.lower()
+
+        # Strip markdown bolding / italics / quotes
+        ans = re.sub(r"^\*+(.*?)\*+$", r"\1", ans).strip()
+        ans = re.sub(r'^["\'](.*?)["\']$', r"\1", ans).strip()
+
+        # Handle yes/no answers that have explanation appended
+        if low.startswith("yes") and (len(ans) == 3 or ans[3] in " .,;:\n"):
+            return "yes"
+        if low.startswith("no") and (len(ans) == 2 or ans[2] in " .,;:\n"):
+            return "no"
+
+        lines = [l.strip() for l in ans.split("\n") if l.strip()]
+        if lines:
+            ans = lines[0]
+        return ans.strip().rstrip(".")

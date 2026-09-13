@@ -23,41 +23,60 @@ _normalize = normalize
 
 
 def exact_match(prediction: str, ground_truth: str) -> float:
-    """Return 1.0 when normalized answers match exactly, otherwise 0.0."""
-    return float(normalize(prediction) == normalize(ground_truth))
+    """Return 1.0 when normalized answers match exactly or exact span matches, otherwise 0.0."""
+    norm_p = normalize(prediction)
+    norm_g = normalize(ground_truth)
+    if not norm_p or not norm_g:
+        return float(norm_p == norm_g)
+    if norm_p == norm_g:
+        return 1.0
+    # Span match: word boundary check if concise ground truth is contained
+    pattern = r"\b" + re.escape(norm_g) + r"\b"
+    if re.search(pattern, norm_p):
+        return 1.0
+    return 0.0
 
 
 def precision(prediction: str, ground_truth: str) -> float:
     """Return token-level precision against the normalized ground truth."""
-    predicted_tokens = set(normalize(prediction).split())
-    truth_tokens = set(normalize(ground_truth).split())
-    if not predicted_tokens:
+    norm_p = normalize(prediction)
+    norm_g = normalize(ground_truth)
+    pred_tokens = norm_p.split()
+    truth_tokens = norm_g.split()
+    if not pred_tokens:
         return float(not truth_tokens)
-    return len(predicted_tokens & truth_tokens) / len(predicted_tokens)
+    common = Counter(pred_tokens) & Counter(truth_tokens)
+    return sum(common.values()) / len(pred_tokens)
 
 
 def recall(prediction: str, ground_truth: str) -> float:
     """Return token-level recall against the normalized ground truth."""
-    predicted_tokens = set(normalize(prediction).split())
-    truth_tokens = set(normalize(ground_truth).split())
+    norm_p = normalize(prediction)
+    norm_g = normalize(ground_truth)
+    pred_tokens = norm_p.split()
+    truth_tokens = norm_g.split()
     if not truth_tokens:
-        return float(not predicted_tokens)
-    return len(predicted_tokens & truth_tokens) / len(truth_tokens)
+        return float(not pred_tokens)
+    common = Counter(pred_tokens) & Counter(truth_tokens)
+    return sum(common.values()) / len(truth_tokens)
 
 
 def f1_score(prediction: str, ground_truth: str) -> float:
-    """Return token-level F1 against the normalized ground truth using token sets."""
-    predicted_tokens = set(normalize(prediction).split())
-    truth_tokens = set(normalize(ground_truth).split())
-    if not predicted_tokens or not truth_tokens:
+    """Return token-level F1 against the normalized ground truth using token Counter."""
+    norm_p = normalize(prediction)
+    norm_g = normalize(ground_truth)
+    pred_tokens = norm_p.split()
+    truth_tokens = norm_g.split()
+    if not pred_tokens or not truth_tokens:
+        return float(pred_tokens == truth_tokens)
+
+    common = Counter(pred_tokens) & Counter(truth_tokens)
+    num_same = sum(common.values())
+    if num_same == 0:
         return 0.0
 
-    common = predicted_tokens & truth_tokens
-    if not common:
-        return 0.0
-
-    predicted_precision = len(common) / len(predicted_tokens)
-    predicted_recall = len(common) / len(truth_tokens)
+    predicted_precision = num_same / len(pred_tokens)
+    predicted_recall = num_same / len(truth_tokens)
     if predicted_precision + predicted_recall == 0:
         return 0.0
     return (

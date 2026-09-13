@@ -76,3 +76,20 @@ export function getHealth(): Promise<{
 }> {
   return request("/health");
 }
+
+export type QuestionBankItem = {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  difficulty: string;
+  reasoning: string;
+};
+
+export type QuestionBankData = Record<string, QuestionBankItem[]>;
+
+export function getQuestionBank(dataset?: string): Promise<QuestionBankData> {
+  const query = dataset ? `?dataset=${encodeURIComponent(dataset)}` : "";
+  return request<QuestionBankData>(`/question-bank${query}`);
+}
+

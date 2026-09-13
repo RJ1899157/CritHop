@@ -10,14 +10,21 @@ const SAMPLE_QUESTIONS: Record<string, string[]> = {
     "Were Scott Derrickson and Ed Wood of the same nationality?",
     "What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?",
     "What science fantasy young adult series, told in first person, has a set of companion books narrating the stories of enslaved worlds and alien species?",
+    "Are the Laleli Mosque and Esma Sultan Mansion located in the same neighborhood?",
   ],
   musique: [
-    "What is the date of death of the director of film The Devil's Brother?",
-    "Who is the mother of the spouse of Arthur, Prince Of Wales?",
+    "Who is the spouse of the Green performer?",
+    "Who founded the company that distributed the film UHF?",
+    "What administrative territorial entity is the owner of Ciudad Deportiva located?",
+    "Where is Ulrich Walter's employer headquartered?",
+    "Which company owns the manufacturer of Learjet 60?",
   ],
   "2wikimultihopqa": [
-    "Who is the director of the film whose cinematographer is Robert Burks?",
-    "Which film has the director who was born earlier, The Bigamist or The Hitch-Hiker?",
+    "Who is the mother of the director of film Polish-Russian War (Film)?",
+    "Which film came out first, Blind Shaft or The Mask Of Fu Manchu?",
+    "When did John V, Prince Of Anhalt-Zerbst's father die?",
+    "What is the award that the director of film Wearing Velvet Slippers Under A Golden Umbrella won?",
+    "Where was the director of film Ronnie Rocket born?",
   ],
 };
 
@@ -32,15 +39,39 @@ const LOADING_STAGES = [
 
 type QueryBoxProps = {
   onResult?: (result: QueryResult) => void;
+  initialQuestion?: string;
+  initialDataset?: string;
 };
 
-export default function QueryBox({ onResult }: QueryBoxProps) {
+export default function QueryBox({ onResult, initialQuestion, initialDataset }: QueryBoxProps) {
   const router = useRouter();
-  const [question, setQuestion] = useState("");
-  const [dataset, setDataset] = useState("hotpotqa");
+  const [question, setQuestion] = useState(initialQuestion || "");
+  const [dataset, setDataset] = useState(initialDataset || "hotpotqa");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStageIdx, setLoadingStageIdx] = useState(0);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (initialQuestion !== undefined) {
+      setQuestion(initialQuestion);
+    }
+  }, [initialQuestion]);
+
+  useEffect(() => {
+    if (initialDataset !== undefined) {
+      setDataset(initialDataset);
+    }
+  }, [initialDataset]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlQ = params.get("question");
+      const urlDs = params.get("dataset");
+      if (urlQ) setQuestion(urlQ);
+      if (urlDs) setDataset(urlDs);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isLoading) {
@@ -139,6 +170,14 @@ export default function QueryBox({ onResult }: QueryBoxProps) {
                 &ldquo;{sampleQ}&rdquo;
               </button>
             ))}
+          </div>
+          <div className="pt-1 text-right">
+            <a
+              href="/questions"
+              className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition hover:underline"
+            >
+              Explore Full Question Banks →
+            </a>
           </div>
         </div>
       )}

@@ -53,3 +53,42 @@ class IsRel:
                 return False
 
         return False
+
+    def batch_critique(
+        self,
+        question: str,
+        reasoning_step: str,
+        passages: list[str],
+    ) -> list[bool]:
+        """Critique candidate passages in a single batched prompt."""
+        if not passages:
+            return []
+        if len(passages) == 1:
+            return [self.critique(question, reasoning_step, passages[0])]
+
+        formatted = "\n\n".join(f"Passage [{i}]: {p}" for i, p in enumerate(passages))
+        prompt = (
+            f"Question: {question}\n"
+            f"Current reasoning step: {reasoning_step}\n\n"
+            f"Candidate passages:\n{formatted}\n\n"
+            "For each candidate passage [0] to [N], is it relevant to the reasoning step? "
+            'Return a valid JSON array of booleans matching candidate order, e.g. [true, false, true].\nJSON:'
+        )
+        try:
+            resp = call_llm(
+                self.client,
+                self.model,
+                [{"role": "user", "content": prompt}],
+                use_cache=True,
+                num_predict=32,
+            ).strip()
+            import json, re
+            match = re.search(r"\[.*?\]", resp, re.DOTALL)
+            if match:
+                decisions = json.loads(match.group(0))
+                if isinstance(decisions, list) and len(decisions) == len(passages):
+                    return [bool(d) for d in decisions]
+        except Exception:
+            pass
+
+        return [True] * len(passages)
