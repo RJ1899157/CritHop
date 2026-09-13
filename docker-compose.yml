@@ -1,4 +1,22 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      "until ollama list >/dev/null 2>&1; do sleep 2; done;
+      ollama pull qwen2.5:3b"
+
   backend:
     build:
       context: .
@@ -9,6 +27,12 @@ services:
       - .env
     environment:
       RERANKER_ADAPTER_PATH: /opt/reranker-slm/model/adapter
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_PROVIDER: local
+      LOCAL_MODEL: qwen2.5:3b
+    depends_on:
+      ollama-init:
+        condition: service_completed_successfully
     volumes:
       - .:/workspace
       - ${RERANKER_SLM_PATH:-../reranker-slm}:/opt/reranker-slm:ro
@@ -29,3 +53,4 @@ services:
 
 volumes:
   frontend_node_modules:
+  ollama_models:
