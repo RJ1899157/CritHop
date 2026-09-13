@@ -1,159 +1,221 @@
 # CritHop
 
-CritHop is a multi-hop question-answering system that combines HopRAG-style graph traversal with Self-RAG-style relevance, support, and usefulness critique.
+## Critique-driven multi-hop question answering
+
+CritHop is a research-oriented multi-hop QA system that combines HopRAG-style passage-graph traversal with Self-RAG-style reflection. It retrieves evidence, follows connected reasoning paths, critiques relevance and support, and generates answers grounded in the surviving passages.
+
+> **Phase 2 integration:** CritHop can replace prompted relevance judging with the trained [reranker-slm](https://github.com/RJ1899157/reranker-slm) adapter at the IsREL gate.
+
+## Why CritHop?
+
+CritHop adds a critique layer to graph-based multi-hop retrieval:
+
+- **Graph traversal:** passages become nodes and semantically similar passages become edges, enabling evidence chains across hops.
+- **Three reflection gates:** IsREL filters passages during traversal, IsSUP verifies answer support, and IsUSE checks answer completeness.
+- **Hybrid retrieval:** BM25 lexical retrieval and BGE dense retrieval are fused with reciprocal rank fusion.
+- **Phase 2 reranking:** the trained reranker-slm model can replace prompted IsREL decisions.
+- **Observability:** hop traces and critique decisions are returned with every answer.
+- **Reproducible deployment:** the backend, frontend, and local Ollama model run together through Docker Compose.
 
 ## Architecture
 
-```text
-                         User question + passages
-                                  |
-                                  v
-                 +---------------------------------------+
-                 | BM25 + BGE hybrid retrieval           |
-                 +---------------------------------------+
-                                  |
-                                  v
-                 +---------------------------------------+
-                 | Semantic PassageGraph                 |
-                 +---------------------------------------+
-                                  |
-                                  v
-                 +---------------------------------------+
-                 | HopTraverser                          |
-                 |                                       |
-                 | [IsREL] Injection Point 1             |
-                 |   Phase 1: prompted Groq critic       |
-                 |   Phase 2: reranker-slm locally        |
-                 +---------------------------------------+
-                                  |
-                                  v
-                 +---------------------------------------+
-                 | Next-hop reasoning with Groq           |
-                 +---------------------------------------+
-                                  |
-                                  v
-                 +---------------------------------------+
-                 | Generator                             |
-                 |                                       |
-                 | [IsSUP] Injection Point 2             |
-                 |   filter passages supporting draft    |
-                 |                                       |
-                 | grounded answer generation            |
-                 |                                       |
-                 | [IsUSE] Injection Point 3             |
-                 |   validate final answer; retry once   |
-                 +---------------------------------------+
-                                  |
-                                  v
-                 answer + supporting passages + HopTrace
-```
+~~~text
+                              User question
+                                   |
+                                   v
+                    +-----------------------------+
+                    | HybridRetriever             |
+                    | BM25 + BGE + RRF            |
+                    +-----------------------------+
+                                   |
+                                   v
+                    +-----------------------------+
+                    | PassageGraph                |
+                    | nodes = passages            |
+                    | edges = BGE similarity      |
+                    +-----------------------------+
+                                   |
+                                   v
+                    +-----------------------------+
+                    | HopTraverser                |
+                    | multi-hop reasoning         |
+                    +-----------------------------+
+                                   |
+                    +--------------+--------------+
+                    |                             |
+                    v                             v
+        [IsREL - Injection Point 1]       Hop reasoning LLM
+        prompted critic or Phase 2        selects next hop
+        reranker-slm replacement
+                    |                             |
+                    +--------------+--------------+
+                                   |
+                                   v
+                    +-----------------------------+
+                    | Generator                   |
+                    | grounded answer synthesis   |
+                    +-----------------------------+
+                                   |
+                    v                             v
+        [IsSUP - Injection Point 2]       [IsUSE - Injection Point 3]
+        verifies passage support          verifies usefulness/completeness
+                                   |                             |
+                                   +--------------+--------------+
+                                                  |
+                                                  v
+                              Answer + evidence + HopTrace
+~~~
 
-## Novel contribution
+## Technology stack
 
-HopRAG contributes logic-aware passage traversal, while Self-RAG contributes reflection signals for retrieval and generation. CritHop combines both ideas into one inspectable pipeline:
+| Layer | Technology |
+|---|---|
+| API | [FastAPI](https://fastapi.tiangolo.com/), [Pydantic](https://docs.pydantic.dev/) |
+| Language model runtime | [Ollama](https://ollama.com/) locally, with Groq-compatible support |
+| Default local model | qwen2.5:3b |
+| Retrieval | [rank_bm25](https://github.com/dorianbrown/rank_bm25), [Sentence Transformers](https://www.sbert.net/), BAAI BGE |
+| Generation and critique | LLaMA-compatible chat interface with cached provider calls |
+| Phase 2 relevance model | [reranker-slm](https://github.com/RJ1899157/reranker-slm), Qwen2.5-0.5B + LoRA |
+| Frontend | [Next.js](https://nextjs.org/), TypeScript, [Tailwind CSS](https://tailwindcss.com/), shadcn/ui |
+| Evaluation | Exact Match, token F1, precision, recall, NDCG@10 |
+| Packaging | Docker Compose |
 
-1. A semantic passage graph exposes multi-hop neighborhoods instead of treating retrieval as a flat ranking problem.
-2. IsREL filters candidate neighbors at every traversal hop.
-3. IsSUP checks whether selected evidence directly supports the generated answer.
-4. IsUSE checks whether the final answer is useful and complete, with one bounded recovery attempt.
-5. HopTrace and the critique log make every retrieval and reflection decision observable.
-6. Phase 2 replaces the expensive prompted IsREL call with the trained reranker-slm cross-encoder.
+## Repository layout
 
-## Results
+~~~text
+CritHop/
+├── api/                 FastAPI endpoints
+├── critique/            IsREL, IsSUP, and IsUSE critics
+├── eval/                metrics, baselines, and comparison results
+├── frontend/            Next.js user interface
+├── generation/          grounded answer generation
+├── graph/               passage graph construction and traversal
+├── pipeline/            CritHop orchestration and configuration
+├── retrieval/           BM25, BGE, and hybrid retrieval
+├── reranker/            Phase 2 reranker adapter integration
+├── tests/               unit and integration tests
+├── utils/               provider clients and shared utilities
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
+~~~
 
-The published HopRAG values below come from its GPT-4o, top-20-passage Table 2 setting. CritHop values below are the completed 50-sample local run recorded in `eval/results/comparison_table.json`; baselines used 500 samples, so this is a smoke-scale comparison rather than a matched benchmark.
+## Quick start with Docker
 
-| Method | HotpotQA EM / F1 | MuSiQue EM / F1 | 2WikiMultiHopQA EM / F1 | NDCG@10 |
-|---|---:|---:|---:|---:|
-| BM25 (HopRAG Table 2) | 41.20 / 53.23 | 13.80 / 21.50 | 40.30 / 44.83 | generated locally |
-| BGE (HopRAG Table 2) | 47.60 / 60.36 | 20.80 / 30.10 | 40.10 / 44.96 | generated locally |
-| Self-RAG | not reported in this setting | not reported | not reported | not reported |
-| HopRAG | 62.00 / 76.06 | 42.20 / 54.90 | 61.10 / 68.26 | not reported |
-| CritHop observed run | 2.00 / 24.40 | 2.00 / 11.01 | 10.00 / 27.75 | 0.820 / 0.599 / 0.000 |
-| CritHop Phase 2 (reranker-slm), recorded datasets | not recorded | 2.00 / 11.01 | 10.00 / 27.75 | 0.599 / 0.000 |
+Docker is the recommended way to run the complete application.
 
-The Phase 1-versus-Phase 2 delta is not claimed here because a matched Phase 1 and Phase 2 run was not recorded for every dataset. Run both modes with the same sample count before reporting that delta.
+~~~bash
+git clone https://github.com/RJ1899157/CritHop.git
+cd CritHop
 
-## Setup
-
-### Local Python backend
-
-```zsh
-cd /Users/rishabhjain/Desktop/CritHop
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
 cp .env.example .env
-```
+# Edit .env if you want to use Groq instead of the local Ollama provider.
 
-Set `GROQ_API_KEY` in `.env`. Use `USE_RERANKER=false` for Phase 1. For Phase 2, set it to `true` and set `RERANKER_ADAPTER_PATH` to the trained adapter directory.
-
-### Local frontend
-
-```zsh
-cd frontend
-npm install
-npm run dev
-```
-
-### Docker Compose
-
-From the project root:
-
-```zsh
 docker compose up --build
-```
+~~~
 
-The backend is available at `http://localhost:8000` and the frontend at `http://localhost:3000`. Set `RERANKER_SLM_PATH` if the sibling `reranker-slm` directory is in a different location.
+The first startup downloads the local qwen2.5:3b model into the Docker volume. After the services are ready:
 
-## Running a query
+- Frontend: http://localhost:3000
+- API: http://localhost:8000
+- API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/health
+- Ollama: http://localhost:11434
 
-Open the UI at `http://localhost:3000`, enter a question, paste passages separated by blank lines, and select **Run CritHop**.
+Stop the stack with:
 
-The equivalent API request is:
+~~~bash
+docker compose down
+~~~
 
-```zsh
+## Run a query
+
+### Web UI
+
+Open http://localhost:3000, enter a question and passages, then submit. The results page displays the generated answer, supporting passages, critique decisions, and hop trace.
+
+### API
+
+~~~bash
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "What nationality was the physicist who conducted pioneering research on radioactivity?",
+    "question": "Which city hosted the event attended by the author of the paper?",
     "passages": [
-      "Marie Curie was a Polish and naturalized-French physicist.",
-      "Marie Curie conducted pioneering research on radioactivity.",
-      "Radioactivity has applications in medical imaging and cancer treatment."
+      "The author attended an event in Paris.",
+      "The paper was written by Alex Morgan.",
+      "The event took place in Paris in 2024."
     ]
   }'
-```
+~~~
 
-Health check:
+## Phase 2: trained reranker integration
 
-```zsh
-curl http://localhost:8000/health
-```
+Phase 2 uses the trained [reranker-slm](https://github.com/RJ1899157/reranker-slm) model as the IsREL critic.
 
-## Phase 2: reranker-slm at IsREL
+The adapter is loaded once and scores each candidate passage for relevance. A passage is retained when the class-1 relevance probability meets the configured threshold. This replaces repeated prompted binary relevance calls while preserving the same injection point in the HopTraverser.
 
-The trained Qwen2.5-0.5B-Instruct LoRA classifier from `reranker-slm` replaces prompted Groq IsREL calls. It loads the adapter and classification head once, scores each candidate passage locally, and accepts a passage when class-1 probability is at least `isrel_threshold`.
+Configure it in .env:
 
-```text
-USE_RERANKER=false  -> Phase 1: prompted Groq IsREL
-USE_RERANKER=true   -> Phase 2: local reranker-slm IsREL
-```
+~~~dotenv
+USE_RERANKER=true
+RERANKER_SLM_PATH=/path/to/reranker-slm/model/adapter
+~~~
 
-Run the Phase 2 smoke test first, then the evaluation:
+Configure the matching adapter path in pipeline/config.yaml:
 
-```zsh
-python -m pytest -q tests
+~~~yaml
+reranker_adapter_path: /path/to/reranker-slm/model/adapter
+~~~
+
+The Phase 2 result is the change in retrieval and answer quality between the prompted IsREL critic and the trained reranker. Compare EM, F1, and NDCG@10 in the generated evaluation table.
+
+## Evaluation
+
+Run the tests:
+
+~~~bash
+source .venv/bin/activate
+python -m pytest -q
+~~~
+
+Run the evaluation:
+
+~~~bash
 python -m eval.baselines
 python -m eval.evaluate
-```
+~~~
 
-The evaluation writes `eval/results/baselines.json` and `eval/results/comparison_table.json`. The Phase 2 delta is the difference between the Phase 1 and Phase 2 EM/F1/NDCG@10 values produced under matched settings; do not substitute the reranker-slm standalone benchmark values because those use a different candidate set.
+The comparison output is written to:
+
+~~~text
+eval/results/baselines.json
+eval/results/comparison_table.json
+~~~
+
+The evaluation uses a capped sample count from pipeline/config.yaml to control runtime and local-model resource usage. For a fair paper comparison, use matched dataset splits and sample counts.
+
+## Recorded results
+
+The repository contains the following recorded smoke-scale results. Published paper values are included for context; CritHop's local run used a smaller sample count and should not be interpreted as a directly matched benchmark.
+
+| System | HotpotQA EM / F1 | MuSiQue EM / F1 | 2WikiMultiHopQA EM / F1 |
+|---|---:|---:|---:|
+| BM25 | 41.20 / 53.23 | 13.80 / 21.50 | 40.30 / 44.83 |
+| BGE | 47.60 / 60.36 | 20.80 / 30.10 | 40.10 / 44.96 |
+| Self-RAG | Not reported in HopRAG Table 2 | Not reported | Not reported |
+| HopRAG | 62.00 / 76.06 | 42.20 / 54.90 | 61.10 / 68.26 |
+| CritHop Phase 1 | 2.00 / 24.40 | 2.00 / 11.01 | 10.00 / 27.75 |
+| CritHop Phase 2 | Run with USE_RERANKER=true | Run with USE_RERANKER=true | Run with USE_RERANKER=true |
 
 ## References
 
-- [HopRAG: Multi-Hop Reasoning for Logic-Aware Retrieval-Augmented Generation](https://arxiv.org/abs/2502.12442)
-- [Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection](https://arxiv.org/abs/2310.11511)
-- [Passage Re-ranking with BERT — Nogueira and Cho](https://arxiv.org/abs/1901.04085)
-- [MS MARCO: A Human Generated MAchine Reading COmprehension Dataset](https://arxiv.org/abs/1611.09268)
-- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)
+- HopRAG: [arXiv:2502.12442](https://arxiv.org/abs/2502.12442)
+- Self-RAG: [arXiv:2310.11511](https://arxiv.org/abs/2310.11511)
+- Nogueira and Cho, Passage Re-ranking with BERT: [arXiv:1901.04085](https://arxiv.org/abs/1901.04085)
+- MS MARCO: [Microsoft Research](https://microsoft.github.io/msmarco/)
+- LoRA: [arXiv:2106.09685](https://arxiv.org/abs/2106.09685)
+
+## License
+
+This project is intended for research, education, and portfolio demonstration. Add a project-specific license before redistributing it as a library or hosted service.
