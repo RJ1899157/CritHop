@@ -356,8 +356,8 @@ RERANKER_ADAPTER_PATH=/opt/reranker-slm/model/adapter
 | **HopRAG** — Multi-Hop Reasoning over Passage Graphs | [arXiv:2502.12442](https://arxiv.org/abs/2502.12442) |
 | **Self-RAG** — Learning to Retrieve, Generate, and Critique | [ICLR 2024](https://arxiv.org/abs/2310.11511) |
 | **reranker-slm** — Domain-Adapted SLM for Relevance Scoring | [GitHub](https://github.com/RJ1899157/reranker-slm) |
-| **HotpotQA** — Diverse Explainable Multi-hop QA | EMNLP 2018 |
-| **MuSiQue** — Single-hop Question Composition | TACL 2022 |
-| **2WikiMultiHopQA** — Evidence Paths for Multi-hop QA | COLING 2020 |
+| **HotpotQA** — Diverse Explainable Multi-hop QA | [EMNLP 2018](https://arxiv.org/abs/1809.09600) |
+| **MuSiQue** — Single-hop Question Composition | [TACL 2022](https://arxiv.org/abs/2108.00573) |
+| **2WikiMultiHopQA** — Evidence Paths for Multi-hop QA | [COLING 2020](https://arxiv.org/abs/2011.01060) |
 
 

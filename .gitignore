@@ -1,5 +1,8 @@
+# Environment
 .env
 .DS_Store
+
+# Python
 .venv/
 __pycache__/
 **/__pycache__/
@@ -10,16 +13,23 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
+# Frontend
 node_modules/
 .next/
 frontend/.env*
 frontend/out/
 
+# Data & model artifacts
 data/raw/
 data/processed/
 data/indexes/
 data/splits/
 checkpoints/
+reranker/adapter/
+
+# Logs
 logs/
 *.log
-reranker/adapter/
+
+# Eval archive
+eval/results/archive/
