@@ -1,21 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import QueryBox from "@/components/QueryBox";
-import AnswerCard from "@/components/AnswerCard";
-import CritiquePanel from "@/components/CritiquePanel";
-import HopTrace from "@/components/HopTrace";
-import QuestionBank from "@/components/QuestionBank";
 import type { QueryResult } from "@/lib/api";
 
 export default function HomePage() {
+  const router = useRouter();
   const [result, setResult] = useState<QueryResult | null>(null);
   const [selectedQ, setSelectedQ] = useState("");
   const [selectedDs, setSelectedDs] = useState("hotpotqa");
-  const resultsRef = useRef<HTMLDivElement>(null);
-  const queryBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -30,19 +26,35 @@ export default function HomePage() {
 
   function handleResult(newResult: QueryResult) {
     setResult(newResult);
-    setTimeout(() => {
-      resultsRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  }
-
-  function handleSelectFromBank(q: string, ds: string) {
-    setSelectedQ(q);
-    setSelectedDs(ds);
-    queryBoxRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Smoothly transition to the dedicated Results tab
+    router.push("/results");
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-12 space-y-16">
+    <main className="mx-auto min-h-screen max-w-6xl px-6 py-12 space-y-12">
+      {/* Active Result Banner if user has previously queried */}
+      {result && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-3.5 shadow-lg backdrop-blur">
+          <div className="flex items-center gap-3">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <p className="text-xs text-slate-300">
+              <span className="font-semibold text-emerald-300">Active Result: </span>
+              <span className="text-white">&ldquo;{result.question}&rdquo;</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/results"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300"
+            >
+              <span>View in Results Tab</span>
+              <span>→</span>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Hero & Query Interface */}
       <div className="grid w-full gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -64,9 +76,26 @@ export default function HomePage() {
             <span>·</span>
             <span>Grounded answers</span>
           </div>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/questions"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+            >
+              <span>Browse 17-Question Bank</span>
+              <span>→</span>
+            </Link>
+            <Link
+              href="/eval"
+              className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-400/20"
+            >
+              <span>View Benchmark Results</span>
+              <span>↗</span>
+            </Link>
+          </div>
         </div>
 
-        <div ref={queryBoxRef} className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
           <QueryBox
             onResult={handleResult}
             initialQuestion={selectedQ}
@@ -75,55 +104,73 @@ export default function HomePage() {
         </div>
       </div>
 
-      {result && (
-        <div ref={resultsRef} className="border-t border-white/10 pt-12">
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
-                Active Result
-              </div>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                Question
-              </p>
-              <h2 className="mt-1 max-w-4xl text-2xl font-semibold text-white">
-                {result.question}
-              </h2>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-400">
-                {result.retrieval_retry ? "Fallback retrieval used" : "Initial retrieval accepted"}
-              </span>
-              <Link
-                href="/results"
-                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
-              >
-                Dedicated Page ↗
-              </Link>
-            </div>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
-            <div className="space-y-6">
-              <AnswerCard
-                answer={result.answer}
-                supportingPassages={result.supporting_passages ?? []}
-              />
-              <HopTrace hopTrace={result.hop_trace ?? []} />
-            </div>
-            <div>
-              <CritiquePanel
-                isrelDecisions={result.critique_log?.isrel_decisions ?? []}
-                issupDecisions={result.critique_log?.issup_decisions ?? []}
-                isuseDecision={result.critique_log?.isuse_decision ?? false}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Embedded Question Bank Showcase */}
+      {/* Feature Showcase Grid - Explaining the App's Dedicated Tabs */}
       <div className="border-t border-white/10 pt-12">
-        <QuestionBank onSelectQuestion={handleSelectFromBank} selectedDataset={selectedDs} />
+        <div className="mb-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">
+            Explore Architecture & Capabilities
+          </p>
+          <h2 className="mt-2 text-2xl font-bold text-white">Dedicated Workspace Tabs</h2>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-3">
+          {/* Tab 1: Results */}
+          <Link
+            href="/results"
+            className="group rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-emerald-400/40 hover:bg-white/[0.05]"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 font-bold group-hover:bg-emerald-400 group-hover:text-slate-950 transition">
+              01
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-white group-hover:text-emerald-300 transition">
+              Results Tab
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">
+              Inspect grounded answers, supporting Wikipedia passages, multi-hop HopTrace graph paths, and Self-RAG critique signals.
+            </p>
+            <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 group-hover:translate-x-1 transition">
+              Open Results →
+            </span>
+          </Link>
+
+          {/* Tab 2: Question Bank */}
+          <Link
+            href="/questions"
+            className="group rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-emerald-400/40 hover:bg-white/[0.05]"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-400/10 border border-sky-400/20 text-sky-400 font-bold group-hover:bg-sky-400 group-hover:text-slate-950 transition">
+              02
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-white group-hover:text-sky-300 transition">
+              Question Bank
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">
+              Browse 17 curated questions across HotpotQA, MuSiQue, and 2WikiMultiHopQA with 1-click loading into the query runner.
+            </p>
+            <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-sky-400 group-hover:translate-x-1 transition">
+              Open Question Bank →
+            </span>
+          </Link>
+
+          {/* Tab 3: Evaluation Showcase */}
+          <Link
+            href="/eval"
+            className="group rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-emerald-400/40 hover:bg-white/[0.05]"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-400/10 border border-purple-400/20 text-purple-400 font-bold group-hover:bg-purple-400 group-hover:text-slate-950 transition">
+              03
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-white group-hover:text-purple-300 transition">
+              Evaluation Showcase
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">
+              Review calibrated metrics demonstrating CritHop outperforming HopRAG and Self-RAG across standard 0–100 EM and F1 benchmarks.
+            </p>
+            <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-purple-400 group-hover:translate-x-1 transition">
+              Open Evaluation →
+            </span>
+          </Link>
+        </div>
       </div>
     </main>
   );

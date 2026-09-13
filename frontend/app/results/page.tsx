@@ -60,6 +60,14 @@ export default function ResultsPage() {
   useEffect(() => {
     setHasMounted(true);
     try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("sample") === "true") {
+          setResult(SAMPLE_RESULT);
+          sessionStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
+          return;
+        }
+      }
       const stored = sessionStorage.getItem("crithop-result");
       if (stored) {
         setResult(JSON.parse(stored) as QueryResult);
@@ -122,24 +130,41 @@ export default function ResultsPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12">
-      <div className="mb-10 flex flex-wrap items-end justify-between gap-5">
+      <div className="mb-10 flex flex-wrap items-end justify-between gap-5 border-b border-white/10 pb-8">
         <div>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 transition hover:text-emerald-300"
-          >
-            ← Ask another question
-          </Link>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-            Question
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Active Query Result
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-400">
+              {result.retrieval_retry ? "Fallback retrieval used" : "Initial retrieval accepted"}
+            </span>
+          </div>
+
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+            Evaluated Multi-Hop Question
           </p>
-          <h1 className="mt-2 max-w-4xl text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+          <h1 className="mt-1.5 max-w-4xl text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             {result.question}
           </h1>
         </div>
-        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-xs text-slate-300">
-          {result.retrieval_retry ? "Fallback retrieval used" : "Initial retrieval accepted"}
-        </span>
+
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 shadow-md shadow-emerald-500/10"
+          >
+            <span>← Ask Another Question</span>
+          </Link>
+          <Link
+            href="/questions"
+            className="inline-flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+          >
+            <span>Question Bank</span>
+            <span>→</span>
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
