@@ -44,6 +44,8 @@ def _load_local_record(dataset: str, question: str) -> tuple[str, str, list[str]
         if path.suffix.lower() in {".json", ".jsonl"}
     )
     normalized_question = question.strip().casefold()
+    records_cache = []
+
     for path in candidates:
         try:
             if path.suffix.lower() == ".jsonl":
@@ -51,11 +53,47 @@ def _load_local_record(dataset: str, question: str) -> tuple[str, str, list[str]
             else:
                 loaded = json.loads(path.read_text(encoding="utf-8"))
                 records = loaded if isinstance(loaded, list) else loaded.get("data", loaded.get("records", []))
+            records_cache.extend(records)
             for record in records:
-                if str(record.get("question", record.get("query", ""))).strip().casefold() == normalized_question:
+                q_text = str(record.get("question", record.get("query", ""))).strip().casefold()
+                if q_text == normalized_question:
                     return _normalize_example(record)
         except (OSError, json.JSONDecodeError, AttributeError, KeyError, TypeError):
             continue
+
+    # 2. Substring or token overlap match
+    q_tokens = set(normalized_question.split())
+    best_record = None
+    best_overlap = 0
+    for record in records_cache:
+        q_text = str(record.get("question", record.get("query", ""))).strip().casefold()
+        if not q_text:
+            continue
+        if normalized_question in q_text or q_text in normalized_question:
+            return _normalize_example(record)
+        rec_tokens = set(q_text.split())
+        overlap = len(q_tokens & rec_tokens)
+        if overlap > best_overlap and overlap >= 3:
+            best_overlap = overlap
+            best_record = record
+
+    if best_record is not None:
+        return _normalize_example(best_record)
+
+    # 3. Fallback: if query is arbitrary, retrieve top passages via BM25 across pre-indexed records
+    if records_cache:
+        all_passages = []
+        for r in records_cache[:500]:
+            _, _, p = _normalize_example(r)
+            all_passages.extend(p)
+        if all_passages:
+            from retrieval.bm25_retriever import BM25Retriever
+            bm25 = BM25Retriever(all_passages)
+            top_results = bm25.retrieve(question, top_k=10)
+            retrieved_passages = [all_passages[idx] for idx, _ in top_results]
+            if retrieved_passages:
+                return question, "", retrieved_passages
+
     return None
 
 
@@ -94,6 +132,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/samples/{dataset}")
+def get_sample_questions(dataset: str) -> list[str]:
+    """Return sample questions from pre-indexed dataset split for quick testing."""
+    dataset_dir = SPLITS_PATH / dataset
+    samples = []
+    if dataset_dir.exists():
+        for path in dataset_dir.rglob("*.jsonl"):
+            try:
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    if line.strip():
+                        rec = json.loads(line)
+                        q = rec.get("question", rec.get("query"))
+                        if q and q not in samples:
+                            samples.append(q)
+                        if len(samples) >= 5:
+                            return samples
+            except Exception:
+                pass
+    return samples or [
+        "Were Scott Derrickson and Ed Wood of the same nationality?",
+        "What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?",
+        "What science fantasy young adult series, told in first person, has a set of companion books narrating the stories of enslaved worlds and alien species?",
+    ]
 
 
 @app.post("/query")

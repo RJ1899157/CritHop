@@ -51,38 +51,35 @@ class HopTraverser:
             candidate_indices = self._neighbor_candidates(current_nodes)
             decisions: dict[int, bool] = {}
 
-            for node_idx in candidate_indices:
-                passage = self.graph.get_passage(node_idx)
-                if self.reranker is not None:
-                    # INJECTION POINT 1: use reranker.is_relevant(query=question, passage=passage)
-                    decisions[node_idx] = self.reranker.is_relevant(
-                        query=question,
-                        passage=passage,
-                        threshold=float(self.config.get("isrel_threshold", 0.7)),
-                    )
-                    if self.isrel is not None and hasattr(self.isrel, "critique"):
-                        try:
-                            prompted_dec = self.isrel.critique(
-                                question,
-                                reasoning_step,
-                                passage,
-                            )
-                            if decisions[node_idx] != prompted_dec:
-                                self.decision_diff_counter += 1
-                        except Exception:
-                            pass
-                elif hasattr(self.isrel, "is_relevant"):
-                    decisions[node_idx] = self.isrel.is_relevant(
-                        question,
-                        passage,
-                        threshold=float(self.config.get("isrel_threshold", 0.7)),
-                    )
+            if self.reranker is not None:
+                threshold = float(self.config.get("isrel_threshold", 0.7))
+                passages = [self.graph.get_passage(node_idx) for node_idx in candidate_indices]
+                if hasattr(self.reranker, "_scores"):
+                    scores = self.reranker._scores(question, passages)
+                    for node_idx, score in zip(candidate_indices, scores):
+                        decisions[node_idx] = bool(score >= threshold)
                 else:
-                    decisions[node_idx] = self.isrel.critique(
-                        question,
-                        reasoning_step,
-                        passage,
-                    )
+                    for node_idx, passage in zip(candidate_indices, passages):
+                        decisions[node_idx] = self.reranker.is_relevant(
+                            query=question,
+                            passage=passage,
+                            threshold=threshold,
+                        )
+            else:
+                for node_idx in candidate_indices:
+                    passage = self.graph.get_passage(node_idx)
+                    if hasattr(self.isrel, "is_relevant"):
+                        decisions[node_idx] = self.isrel.is_relevant(
+                            question,
+                            passage,
+                            threshold=float(self.config.get("isrel_threshold", 0.7)),
+                        )
+                    else:
+                        decisions[node_idx] = self.isrel.critique(
+                            question,
+                            reasoning_step,
+                            passage,
+                        )
 
             kept = sum(1 for d in decisions.values() if d)
             pruned = len(decisions) - kept

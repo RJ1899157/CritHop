@@ -5,12 +5,30 @@ import { useRouter } from "next/navigation";
 
 import { queryCritHop } from "@/lib/api";
 
+const SAMPLE_QUESTIONS: Record<string, string[]> = {
+  hotpotqa: [
+    "Were Scott Derrickson and Ed Wood of the same nationality?",
+    "What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?",
+    "What science fantasy young adult series, told in first person, has a set of companion books narrating the stories of enslaved worlds and alien species?",
+  ],
+  musique: [
+    "What is the date of death of the director of film The Devil's Brother?",
+    "Who is the mother of the spouse of Arthur, Prince Of Wales?",
+  ],
+  "2wikimultihopqa": [
+    "Who is the director of the film whose cinematographer is Robert Burks?",
+    "Which film has the director who was born earlier, The Bigamist or The Hitch-Hiker?",
+  ],
+};
+
 export default function QueryBox() {
   const router = useRouter();
   const [question, setQuestion] = useState("");
   const [dataset, setDataset] = useState("hotpotqa");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const samples = SAMPLE_QUESTIONS[dataset] || [];
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,26 +59,59 @@ export default function QueryBox() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
-        <label htmlFor="question" className="text-sm font-medium text-slate-200">
-          Question
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="question" className="text-sm font-medium text-slate-200">
+            Question
+          </label>
+          <span className="text-xs text-slate-400">Context retrieved automatically</span>
+        </div>
         <textarea
           id="question"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Ask a multi-hop question..."
-          className="min-h-28 w-full resize-y rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-400/20"
+          placeholder="Ask a multi-hop question or select a sample below..."
+          className="min-h-24 w-full resize-y rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-400/20"
         />
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="dataset" className="text-sm font-medium text-slate-200">Dataset</label>
-        <select id="dataset" value={dataset} onChange={(event) => setDataset(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-400/20">
+        <label htmlFor="dataset" className="text-sm font-medium text-slate-200">
+          Dataset
+        </label>
+        <select
+          id="dataset"
+          value={dataset}
+          onChange={(event) => {
+            setDataset(event.target.value);
+            setQuestion("");
+          }}
+          className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-400/20"
+        >
           <option value="hotpotqa">HotpotQA</option>
           <option value="musique">MuSiQue</option>
           <option value="2wikimultihopqa">2WikiMultiHopQA</option>
         </select>
       </div>
+
+      {samples.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+            Quick test samples:
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {samples.map((sampleQ, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setQuestion(sampleQ)}
+                className="text-left text-xs text-slate-300 hover:text-emerald-300 transition rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 hover:border-emerald-400/30 hover:bg-emerald-400/5"
+              >
+                &ldquo;{sampleQ}&rdquo;
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {error && (
         <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
@@ -71,9 +122,19 @@ export default function QueryBox() {
       <button
         type="submit"
         disabled={isLoading}
-        className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 shadow-lg shadow-emerald-500/10"
       >
-        {isLoading ? "Traversing evidence..." : "Run CritHop"}
+        {isLoading ? (
+          <span className="flex items-center gap-2">
+            <svg className="h-4 w-4 animate-spin text-slate-950" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            Traversing evidence graph...
+          </span>
+        ) : (
+          "Run CritHop"
+        )}
       </button>
     </form>
   );

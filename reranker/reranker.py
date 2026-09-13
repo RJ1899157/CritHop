@@ -99,31 +99,40 @@ class Reranker:
         )
         self.model.eval()
         self._device = model_device
+        if self.device == "cpu":
+            torch.set_num_threads(int(os.getenv("TORCH_NUM_THREADS", "2")))
 
-    def _scores(self, query: str, passages: list[str]) -> list[float]:
+    def _scores(self, query: str, passages: list[str], batch_size: int = 4) -> list[float]:
         if not passages:
             return []
-        prompts = [
-            f"[QUERY]: {query}\n[PASSAGE]: {passage}\n"
-            "Is this passage relevant to the query? "
-            "Answer with relevant or irrelevant."
-            for passage in passages
-        ]
-        tokens = self.tokenizer(
-            prompts,
-            max_length=self.max_length,
-            truncation=True,
-            padding="max_length",
-            return_tensors="pt",
-        )
-        input_ids = tokens["input_ids"].to(self._device)
-        attention_mask = tokens["attention_mask"].to(self._device)
-        with torch.no_grad():
-            output = self.model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
+        if getattr(self, "_first_inference", True):
+            print("reranker-slm loaded, running inference")
+            self._first_inference = False
+        all_scores: list[float] = []
+        for i in range(0, len(passages), batch_size):
+            batch_passages = passages[i : i + batch_size]
+            prompts = [
+                f"[QUERY]: {query}\n[PASSAGE]: {passage}\n"
+                "Is this passage relevant to the query? "
+                "Answer with relevant or irrelevant."
+                for passage in batch_passages
+            ]
+            tokens = self.tokenizer(
+                prompts,
+                max_length=self.max_length,
+                truncation=True,
+                padding=True,
+                return_tensors="pt",
             )
-            return torch.softmax(output.logits, dim=-1)[:, 1].cpu().tolist()
+            input_ids = tokens["input_ids"].to(self._device)
+            attention_mask = tokens["attention_mask"].to(self._device)
+            with torch.no_grad():
+                output = self.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                )
+                all_scores.extend(torch.softmax(output.logits, dim=-1)[:, 1].cpu().tolist())
+        return all_scores
 
     def rerank(self, query: str, passages: list[str]) -> list[tuple[str, float]]:
         """Return passages sorted by class-1 relevance probability."""

@@ -132,7 +132,19 @@ docker compose down
 
 ### Web UI
 
-Open http://localhost:3000, select a dataset, enter a question from that dataset, and submit. CritHop resolves the matching record and context server-side. The results page displays the generated answer, supporting passages, critique decisions, and hop trace.
+Open http://localhost:3000.
+1. Select a dataset from the dropdown (**HotpotQA**, **MuSiQue**, or **2WikiMultiHopQA**).
+2. Type any multi-hop question or click one of the suggested sample question pills.
+3. Click **"Run CritHop"**. CritHop automatically indexes and resolves the ground-truth context passages server-side from `data/splits/`.
+4. Inspect the generated answer, multi-hop reasoning trace, critique gate logs (IsREL, IsSUP, IsUSE), and grounded supporting passages.
+
+### Evaluation Showcase
+
+Visit http://localhost:3000/eval or click **Evaluation Showcase** in the navbar to view the full benchmark comparison:
+- Side-by-side comparison across **HotpotQA**, **MuSiQue**, and **2WikiMultiHopQA** on Exact Match (EM) and F1 metrics.
+- Benchmark baselines from published literature (**BM25**, **BGE**, **Self-RAG**, **HopRAG**) shown in muted grey.
+- **CritHop Phase 1** (Prompted LLM) and **CritHop Phase 2** (Trained `reranker-slm` LoRA adapter) highlighted in emerald green.
+- One-click **"Run Evaluation"** button to trigger evaluation runs and refresh the comparison table.
 
 ### API
 
@@ -140,7 +152,7 @@ Open http://localhost:3000, select a dataset, enter a question from that dataset
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "Which city hosted the event attended by the author of the paper?",
+    "question": "Were Scott Derrickson and Ed Wood of the same nationality?",
     "dataset": "hotpotqa"
   }'
 ~~~
@@ -149,7 +161,7 @@ curl -X POST http://localhost:8000/query \
 
 Phase 2 uses the trained [reranker-slm](https://github.com/RJ1899157/reranker-slm) model as the IsREL critic.
 
-The adapter is loaded once and scores each candidate passage for relevance. A passage is retained when the class-1 relevance probability meets the configured threshold. This replaces repeated prompted binary relevance calls while preserving the same injection point in the `HopTraverser`.
+The adapter is loaded once and scores each candidate passage for relevance using batched forward passes. A passage is retained when the class-1 relevance probability meets the configured threshold. This replaces repeated prompted binary relevance calls while preserving the same injection point in the `HopTraverser`.
 
 Configure it in `.env`:
 
@@ -163,8 +175,6 @@ Configure the matching adapter path in `pipeline/config.yaml`:
 ~~~yaml
 reranker_adapter_path: /path/to/reranker-slm/model/adapter
 ~~~
-
-The Phase 2 result is the change in retrieval and answer quality between the prompted IsREL critic and the trained reranker. Compare EM, F1, and NDCG@10 in the generated evaluation table.
 
 ## Sample Test Run
 

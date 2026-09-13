@@ -1,6 +1,8 @@
 services:
   ollama:
     image: ollama/ollama:latest
+    profiles:
+      - local
     ports:
       - "11434:11434"
     volumes:
@@ -8,6 +10,8 @@ services:
 
   ollama-init:
     image: ollama/ollama:latest
+    profiles:
+      - local
     depends_on:
       - ollama
     environment:
@@ -26,16 +30,15 @@ services:
     env_file:
       - .env
     environment:
+      PYTHONUNBUFFERED: "1"
       RERANKER_ADAPTER_PATH: /opt/reranker-slm/model/adapter
       OLLAMA_BASE_URL: http://ollama:11434
-      LLM_PROVIDER: local
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
       LOCAL_MODEL: qwen2.5:3b
-    depends_on:
-      ollama-init:
-        condition: service_completed_successfully
     volumes:
       - .:/workspace
       - ${RERANKER_SLM_PATH:-../reranker-slm}:/opt/reranker-slm:ro
+      - ~/.cache/huggingface:/root/.cache/huggingface
     working_dir: /workspace
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
