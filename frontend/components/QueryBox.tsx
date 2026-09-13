@@ -99,7 +99,7 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
     setIsLoading(true);
     try {
       const result = await queryCritHop(normalizedQuestion, dataset);
-      sessionStorage.setItem("crithop-result", JSON.stringify(result));
+      localStorage.setItem("crithop-result", JSON.stringify(result));
       if (onResult) {
         onResult(result);
       } else {

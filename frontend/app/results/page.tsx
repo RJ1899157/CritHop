@@ -64,11 +64,11 @@ export default function ResultsPage() {
         const params = new URLSearchParams(window.location.search);
         if (params.get("sample") === "true") {
           setResult(SAMPLE_RESULT);
-          sessionStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
+          localStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
           return;
         }
       }
-      const stored = sessionStorage.getItem("crithop-result");
+      const stored = localStorage.getItem("crithop-result");
       if (stored) {
         setResult(JSON.parse(stored) as QueryResult);
       }
@@ -79,7 +79,7 @@ export default function ResultsPage() {
 
   function loadSample() {
     setResult(SAMPLE_RESULT);
-    sessionStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
+    localStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
   }
 
   if (!hasMounted) {

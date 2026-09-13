@@ -15,7 +15,7 @@ export default function HomePage() {
 
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem("crithop-result");
+      const stored = localStorage.getItem("crithop-result");
       if (stored) {
         setResult(JSON.parse(stored) as QueryResult);
       }
