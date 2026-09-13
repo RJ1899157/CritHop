@@ -1,10 +1,19 @@
 # CritHop
 
-## Critique-Driven Multi-Hop Question Answering
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Next.js-16.3-black?logo=next.js&logoColor=white" alt="Next.js" />
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Benchmarks-HopRAG%20%26%20Self--RAG-10B981" alt="Benchmarks" />
+  <img src="https://img.shields.io/badge/License-Research-blue" alt="License" />
+</p>
 
-CritHop is a research-oriented multi-hop QA system that combines **HopRAG-style passage-graph traversal** with **Self-RAG-style self-reflection**. It retrieves evidence, constructs an inter-passage semantic graph, traverses connected multi-hop reasoning paths, critiques relevance and support at every step, and generates grounded answers backed by verified evidence chains.
+### Critique-Driven Multi-Hop Question Answering with Semantic Passage Graphs and Neural SLM Reflection
 
-> **Phase 2 Integration:** CritHop can dynamically substitute prompted relevance judging with a trained **[reranker-slm](https://github.com/RJ1899157/reranker-slm)** adapter at the `IsREL` gate, yielding higher multi-hop accuracy and consistent inference speed.
+CritHop is a high-performance multi-hop QA system that combines **HopRAG-style passage-graph traversal** with **Self-RAG-style self-reflection**. It retrieves evidence, constructs an inter-passage semantic graph, traverses connected multi-hop reasoning paths, critiques relevance and support at every step, and generates grounded answers backed by verified evidence chains.
+
+> **Phase 2 Integration:** CritHop can dynamically substitute prompted relevance judging with a fine-tuned **[reranker-slm](https://github.com/RJ1899157/reranker-slm)** adapter at the `IsREL` gate, delivering higher multi-hop accuracy and consistent latency.
 
 ---
 
@@ -42,29 +51,37 @@ Query latency has been reduced from **~80 seconds** down to **8.5s – 12.3s** t
 
 ---
 
-## Dedicated Application Workspaces (Separate Tabs)
+## 📸 Dedicated Application Workspaces (Visual Interface Tour)
 
-CritHop features a clean, tab-separated Next.js interface where each workspace has a dedicated purpose:
+CritHop provides four clean, dedicated workspaces accessible from the top navigation bar:
 
-### 1. Query Tab (`/`)
+### Tab 1: Query Workspace (`/`)
 Select target dataset (**HotpotQA**, **MuSiQue**, **2WikiMultiHopQA**), enter custom questions or pick 1-click sample chips. Automatic server-side passage retrieval eliminates manual context pasting. Submitting a query executes the pipeline and navigates directly to the Results tab.
 
-![Query Tab](docs/images/01_query_tab.png)
+<p align="center">
+  <img src="docs/images/01_query_tab.png" alt="Query Workspace" width="100%" />
+</p>
 
-### 2. Results Tab (`/results`)
+### Tab 2: Results & Multi-Hop Critique Workspace (`/results`)
 Dedicated inspection page displaying the grounded response, cited supporting passages, step-by-step multi-hop `HopTrace`, and a tabbed `Self-Reflection Critique Panel` (Relevance `IsREL`, Support `IsSUP`, and Usefulness `IsUSE`).
 
-![Results Tab](docs/images/02_results_tab.png)
+<p align="center">
+  <img src="docs/images/02_results_tab.png" alt="Results Workspace" width="100%" />
+</p>
 
-### 3. Question Bank Tab (`/questions`)
+### Tab 3: Curated Benchmark Question Bank (`/questions`)
 Explore 17 curated multi-hop questions categorized by reasoning difficulty and pattern across all three benchmark datasets. Includes reasoning breakdown, hidden target answers, and 1-click **"Run Query →"** execution.
 
-![Question Bank Tab](docs/images/03_question_bank_tab.png)
+<p align="center">
+  <img src="docs/images/03_question_bank_tab.png" alt="Question Bank Workspace" width="100%" />
+</p>
 
-### 4. Evaluation Showcase Tab (`/eval`)
+### Tab 4: Evaluation Benchmark Showcase (`/eval`)
 Visual benchmark comparison table and charts comparing CritHop against HopRAG, Self-RAG, and retrieval baselines. Supports live on-demand benchmark re-runs.
 
-![Evaluation Showcase Tab](docs/images/04_evaluation_tab.png)
+<p align="center">
+  <img src="docs/images/04_evaluation_tab.png" alt="Evaluation Showcase" width="100%" />
+</p>
 
 ---
 
