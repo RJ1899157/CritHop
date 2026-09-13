@@ -34,6 +34,8 @@ class Generator:
             for passage, is_supported in zip(passages, issup_scores)
             if is_supported
         ][:3]
+        if not supporting_passages:
+            supporting_passages = passages[:3]
 
         answer = self._call_llm(
             question,

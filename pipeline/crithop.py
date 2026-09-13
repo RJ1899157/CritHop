@@ -54,7 +54,15 @@ class CritHop:
                 max_retries=0,
             )
         )
-        self.isrel = self._create_isrel()
+        use_reranker_env = os.getenv("USE_RERANKER", "false").lower()
+        self.use_reranker = use_reranker_env in ("true", "1", "yes")
+        if self.use_reranker:
+            print("IsREL mode: reranker-slm")
+        else:
+            print("IsREL mode: prompted LLM")
+
+        self.isrel = IsRel(model=self.model, client=self.groq_client)
+        self.reranker = self._create_reranker() if self.use_reranker else None
         self.issup = IsSup(model=self.model, client=self.groq_client)
         self.isuse = IsUse(model=self.model, client=self.groq_client)
 
@@ -72,64 +80,95 @@ class CritHop:
 
     def run(self, question: str, context_passages: list[str]) -> dict:
         """Run the complete CritHop pipeline for one question."""
-        self.graph = PassageGraph(context_passages, self.config)
-        self.graph.build()
+        try:
+            self.graph = PassageGraph(context_passages, self.config)
+            graph_data = self.graph.build()
+            graph_dict = getattr(self.graph, "graph", None)
+            if not isinstance(graph_dict, dict):
+                graph_dict = graph_data if isinstance(graph_data, dict) else {}
+            n_nodes = len(graph_dict.get("nodes", {}))
+            n_edges = sum(len(neighbors) for neighbors in graph_dict.get("adjacency", {}).values()) // 2
+            print(f"PassageGraph built: {n_nodes} nodes, {n_edges} edges")
 
-        self.bm25 = BM25Retriever(context_passages)
-        self.bge = BGERetriever(
-            context_passages,
-            self.config.get("embedding_model", "BAAI/bge-base-en-v1.5"),
-            self.config.get("embedding_device", "cpu"),
-        )
-        self.hybrid = HybridRetriever(self.bm25, self.bge)
+            self.bm25 = BM25Retriever(context_passages)
+            self.bge = BGERetriever(
+                context_passages,
+                self.config.get("embedding_model", "BAAI/bge-base-en-v1.5"),
+                self.config.get("embedding_device", "cpu"),
+            )
+            self.hybrid = HybridRetriever(self.bm25, self.bge)
 
-        top_k = int(self.config.get("top_k_retrieval", 10))
-        initial_results = self.hybrid.retrieve(question, top_k)
-        start_passages = [index for index, _ in initial_results]
+            top_k = int(self.config.get("top_k_retrieval", 10))
+            initial_results = self.hybrid.retrieve(question, top_k)
+            print(f"HybridRetriever returned {len(initial_results)} passages")
+            start_passages = [index for index, _ in initial_results]
 
-        self.traverser = HopTraverser(
-            graph=self.graph,
-            config=self.config,
-            groq_client=self.groq_client,
-            isrel=self.isrel,
-        )
-        traversed_passages = self.traverser.traverse(
-            question,
-            start_passages,
-        )
-        passages_for_generation = traversed_passages or [
-            context_passages[index] for index in start_passages
-        ]
-        generation_result = self.generator.generate(
-            question,
-            passages_for_generation,
-        )
+            import inspect
 
-        isrel_decisions = [
-            decision
-            for hop in self.traverser.hop_log
-            for decision in hop["isrel_decisions"].values()
-        ]
-        return {
-            "question": question,
-            "answer": generation_result["answer"],
-            "hop_trace": self.traverser.hop_log,
-            "critique_log": {
-                "isrel_decisions": isrel_decisions,
-                "issup_decisions": generation_result["issup_scores"],
-                "isuse_decision": generation_result["isuse_score"],
-            },
-            "supporting_passages": generation_result[
-                "supporting_passages"
-            ],
-            "retrieval_retry": generation_result["retrieval_retry"],
-        }
+            traverser_kwargs = {
+                "graph": self.graph,
+                "config": self.config,
+                "groq_client": self.groq_client,
+                "isrel": self.isrel,
+            }
+            try:
+                sig = inspect.signature(HopTraverser.__init__)
+                if "reranker" in sig.parameters:
+                    traverser_kwargs["reranker"] = self.reranker
+            except Exception:
+                pass
 
-    def _create_isrel(self):
-        use_reranker = os.getenv("USE_RERANKER", "false").lower() == "true"
-        if not use_reranker:
-            return IsRel(model=self.model, client=self.groq_client)
+            self.traverser = HopTraverser(**traverser_kwargs)
+            traversed_passages = self.traverser.traverse(
+                question,
+                start_passages,
+            )
+            passages_for_generation = traversed_passages or [
+                context_passages[index] for index in start_passages
+            ]
+            generation_result = self.generator.generate(
+                question,
+                passages_for_generation,
+            )
+            print(f"Generator received {len(generation_result.get('supporting_passages', []))} passages after IsSup")
+            print(f"Final answer: {generation_result['answer']}")
 
+            isrel_decisions = [
+                decision
+                for hop in self.traverser.hop_log
+                for decision in hop["isrel_decisions"].values()
+            ]
+            return {
+                "question": question,
+                "answer": generation_result["answer"],
+                "hop_trace": self.traverser.hop_log,
+                "critique_log": {
+                    "isrel_decisions": isrel_decisions,
+                    "issup_decisions": generation_result["issup_scores"],
+                    "isuse_decision": generation_result["isuse_score"],
+                },
+                "supporting_passages": generation_result[
+                    "supporting_passages"
+                ],
+                "retrieval_retry": generation_result["retrieval_retry"],
+            }
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            return {
+                "question": question,
+                "answer": "Pipeline error — see logs",
+                "hop_trace": [],
+                "critique_log": {
+                    "isrel_decisions": {},
+                    "issup_decisions": [],
+                    "isuse_decision": False,
+                },
+                "supporting_passages": [],
+                "retrieval_retry": False,
+            }
+
+    def _create_reranker(self):
         try:
             from reranker.reranker import Reranker
         except ImportError as error:

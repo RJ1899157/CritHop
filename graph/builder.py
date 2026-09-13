@@ -57,6 +57,33 @@ class PassageGraph:
                     adjacency[left_idx].append(right_idx)
                     adjacency[right_idx].append(left_idx)
 
+        total_edges = sum(len(neighbors) for neighbors in adjacency.values()) // 2
+        # If no edges formed because all similarity scores are below threshold, lower to 0.3
+        if total_edges == 0 and len(self.passages) > 1:
+            threshold = 0.3
+            for left_idx in range(len(self.passages)):
+                for right_idx in range(left_idx + 1, len(self.passages)):
+                    if similarities[left_idx, right_idx] >= threshold:
+                        adjacency[left_idx].append(right_idx)
+                        adjacency[right_idx].append(left_idx)
+            total_edges = sum(len(neighbors) for neighbors in adjacency.values()) // 2
+
+            # Fallback — if a node has 0 neighbors, connect it to its top-3 most similar passages regardless of threshold
+            for idx in range(len(self.passages)):
+                if not adjacency[idx]:
+                    scores = [
+                        (other_idx, float(similarities[idx, other_idx]))
+                        for other_idx in range(len(self.passages))
+                        if other_idx != idx
+                    ]
+                    scores.sort(key=lambda item: item[1], reverse=True)
+                    top_neighbors = [other_idx for other_idx, _ in scores[:3]]
+                    for neighbor in top_neighbors:
+                        if neighbor not in adjacency[idx]:
+                            adjacency[idx].append(neighbor)
+                        if idx not in adjacency[neighbor]:
+                            adjacency[neighbor].append(idx)
+
         self.graph = {"nodes": nodes, "adjacency": adjacency}
         return self.graph
 

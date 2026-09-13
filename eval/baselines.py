@@ -85,6 +85,13 @@ def _normalize_with_labels(example: dict[str, Any]):
 
 
 def _load_split(dataset_name: str):
+    local_path = Path(f"data/splits/{dataset_name}/val.jsonl")
+    if local_path.exists():
+        from datasets import Dataset
+        with local_path.open("r", encoding="utf-8") as file:
+            records = [json.loads(line) for line in file if line.strip()]
+        return Dataset.from_list(records)
+
     dataset_id, dataset_config = DATASET_SPECS[dataset_name]
     if dataset_name == "2wikimultihopqa":
         return load_dataset(
@@ -111,8 +118,13 @@ def _evaluate_retriever(
     examples,
     model_name: str | None = None,
     device: str = "cpu",
+    top_k: int = 10,
+    print_samples: bool = False,
 ):
+    from eval.metrics import normalize
+
     scores = []
+    printed = 0
     for example in examples:
         question, answer, passages, labels = _normalize_with_labels(example)
         if not passages:
@@ -123,14 +135,46 @@ def _evaluate_retriever(
             else retriever_cls(passages)
         )
         results = retriever.retrieve(question, top_k=len(passages))
-        prediction = passages[results[0][0]] if results else ""
+        top_k_indices = [index for index, _ in results[:top_k]]
+        top_passage = passages[results[0][0]] if results else ""
+        concatenated_top_k = " ".join(passages[idx] for idx in top_k_indices)
+
+        norm_a = normalize(answer)
+        norm_top = normalize(top_passage)
+        norm_concat = normalize(concatenated_top_k)
+
+        # EM = 1.0 if ground truth is in top-1 passage
+        em = 1.0 if norm_a and norm_a in norm_top else 0.0
+
+        # F1 = token overlap between top-1 passage and answer
+        truth_tokens = set(norm_a.split())
+        passage_tokens = set(norm_top.split())
+        common = truth_tokens & passage_tokens
+        if not truth_tokens or not common:
+            f1 = 0.0
+        elif em == 1.0:
+            f1 = 1.0
+        else:
+            overlap_str = " ".join(common)
+            f1 = f1_score(overlap_str, answer)
+
+        if print_samples and printed < 3:
+            print(
+                f"Sample {printed + 1}: (question={repr(question)}, "
+                f"ground_truth={repr(answer)}, "
+                f"top_passage={repr(top_passage[:80] + '...')}, "
+                f"EM={em}, F1={f1})"
+            )
+            printed += 1
+
         ranked_scores = [0.0] * len(passages)
         for rank, (index, _) in enumerate(results):
             ranked_scores[index] = 1.0 / (rank + 1)
         scores.append({
-            "EM": exact_match(prediction, answer),
-            "F1": f1_score(prediction, answer),
+            "EM": em,
+            "F1": f1,
             "NDCG@10": ndcg_at_k(labels, ranked_scores, k=10),
+            "top_k_has_answer": float(bool(norm_a and norm_a in norm_concat)),
         })
 
     count = len(scores)
@@ -144,18 +188,25 @@ def _evaluate_retriever(
 
 def run_baselines(
     config_path: str = "pipeline/config.yaml",
-    sample_count: int = 500,
+    sample_count: int | None = None,
     output_path: str = "eval/results/baselines.json",
 ) -> dict:
     """Run BM25 and BGE on each configured evaluation dataset."""
     with open(config_path, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file) or {}
 
+    sample_count = sample_count or int(config.get("eval_samples", 50))
+
     results = {}
     for dataset_name in DATASET_NAMES:
         examples = list(_load_split(dataset_name).select(range(sample_count)))
+        print(f"\n--- Running baselines for {dataset_name} ({len(examples)} samples) ---")
         results[dataset_name] = {
-            "BM25": _evaluate_retriever(BM25Retriever, examples),
+            "BM25": _evaluate_retriever(
+                BM25Retriever,
+                examples,
+                print_samples=dataset_name == "hotpotqa",
+            ),
             "BGE": _evaluate_retriever(
                 BGERetriever,
                 examples,

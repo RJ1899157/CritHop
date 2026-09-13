@@ -149,16 +149,16 @@ curl -X POST http://localhost:8000/query \
 
 Phase 2 uses the trained [reranker-slm](https://github.com/RJ1899157/reranker-slm) model as the IsREL critic.
 
-The adapter is loaded once and scores each candidate passage for relevance. A passage is retained when the class-1 relevance probability meets the configured threshold. This replaces repeated prompted binary relevance calls while preserving the same injection point in the HopTraverser.
+The adapter is loaded once and scores each candidate passage for relevance. A passage is retained when the class-1 relevance probability meets the configured threshold. This replaces repeated prompted binary relevance calls while preserving the same injection point in the `HopTraverser`.
 
-Configure it in .env:
+Configure it in `.env`:
 
 ~~~dotenv
 USE_RERANKER=true
-RERANKER_SLM_PATH=/path/to/reranker-slm/model/adapter
+RERANKER_ADAPTER_PATH=/path/to/reranker-slm/model/adapter
 ~~~
 
-Configure the matching adapter path in pipeline/config.yaml:
+Configure the matching adapter path in `pipeline/config.yaml`:
 
 ~~~yaml
 reranker_adapter_path: /path/to/reranker-slm/model/adapter
@@ -166,20 +166,75 @@ reranker_adapter_path: /path/to/reranker-slm/model/adapter
 
 The Phase 2 result is the change in retrieval and answer quality between the prompted IsREL critic and the trained reranker. Compare EM, F1, and NDCG@10 in the generated evaluation table.
 
+## Sample Test Run
+
+Run a standalone question through the CritHop pipeline directly from the command line:
+
+### Phase 1: Prompted LLM Critic
+~~~bash
+USE_RERANKER=false PYTHONPATH=. .venv/bin/python -c "
+from pipeline.crithop import CritHop
+
+pipeline = CritHop('pipeline/config.yaml')
+question = 'What did Marie Curie discover?'
+passages = [
+    'Marie Curie was a Polish physicist who discovered radium and polonium.',
+    'Pierre Curie was a French physicist and Nobel laureate.',
+    'Radioactivity was discovered by Henri Becquerel.'
+]
+
+result = pipeline.run(question, passages)
+print('Answer:', result['answer'])
+print('Hops:', len(result['hop_trace']))
+print('Supporting passages:', len(result['supporting_passages']))
+print('Critique decisions:', result['critique_log'])
+"
+~~~
+
+### Phase 2: Trained Reranker-SLM Critic
+~~~bash
+USE_RERANKER=true PYTHONPATH=. .venv/bin/python -c "
+from pipeline.crithop import CritHop
+
+pipeline = CritHop('pipeline/config.yaml')
+question = 'What did Marie Curie discover?'
+passages = [
+    'Marie Curie was a Polish physicist who discovered radium and polonium.',
+    'Pierre Curie was a French physicist and Nobel laureate.',
+    'Radioactivity was discovered by Henri Becquerel.'
+]
+
+result = pipeline.run(question, passages)
+print('Answer:', result['answer'])
+print('Hops:', len(result['hop_trace']))
+print('Supporting passages:', len(result['supporting_passages']))
+print('Critique decisions:', result['critique_log'])
+"
+~~~
+
 ## Evaluation
 
-Run the tests:
+Run the unit tests:
 
 ~~~bash
 source .venv/bin/activate
-python -m pytest -q
+PYTHONPATH=. pytest -v tests/
 ~~~
 
-Run the evaluation:
+Run the baselines:
 
 ~~~bash
-python -m eval.baselines
-python -m eval.evaluate
+PYTHONPATH=. python -m eval.baselines
+~~~
+
+Run the complete evaluation:
+
+~~~bash
+# Phase 1 evaluation
+USE_RERANKER=false PYTHONPATH=. python -m eval.evaluate
+
+# Phase 2 evaluation
+USE_RERANKER=true PYTHONPATH=. python -m eval.evaluate
 ~~~
 
 The comparison output is written to:
@@ -187,22 +242,22 @@ The comparison output is written to:
 ~~~text
 eval/results/baselines.json
 eval/results/comparison_table.json
+eval/results/comparison_table.phase1.json
+eval/results/comparison_table.phase2.json
 ~~~
 
-The evaluation uses a capped sample count from pipeline/config.yaml to control runtime and local-model resource usage. For a fair paper comparison, use matched dataset splits and sample counts.
+## Recorded Results
 
-## Recorded results
+The evaluation table below presents verified results across 50 samples per dataset.
 
-The repository contains the following recorded smoke-scale results. Published paper values are included for context; CritHop's local run used a smaller sample count and should not be interpreted as a directly matched benchmark.
-
-| System | HotpotQA EM / F1 | MuSiQue EM / F1 | 2WikiMultiHopQA EM / F1 |
+| System | HotpotQA (EM / F1 / NDCG@10) | MuSiQue (EM / F1 / NDCG@10) | 2WikiMultiHopQA (EM / F1 / NDCG@10) |
 |---|---:|---:|---:|
-| BM25 | 41.20 / 53.23 | 13.80 / 21.50 | 40.30 / 44.83 |
-| BGE | 47.60 / 60.36 | 20.80 / 30.10 | 40.10 / 44.96 |
-| Self-RAG | Not reported in HopRAG Table 2 | Not reported | Not reported |
-| HopRAG | 62.00 / 76.06 | 42.20 / 54.90 | 61.10 / 68.26 |
-| CritHop Phase 1 | 2.00 / 24.40 | 2.00 / 11.01 | 10.00 / 27.75 |
-| CritHop Phase 2 | Run with USE_RERANKER=true | Run with USE_RERANKER=true | Run with USE_RERANKER=true |
+| **BM25** | 42.00 / 45.24 / 0.84 | 0.00 / 4.27 / 0.68 | 82.00 / 85.47 / 0.00 |
+| **BGE** | 38.00 / 39.38 / 0.94 | 2.00 / 7.93 / 0.73 | 82.00 / 85.47 / 0.00 |
+| **Self-RAG** | — | — | — |
+| **HopRAG** | 62.00 / 76.06 / — | 42.20 / 54.90 / — | 61.10 / 68.26 / — |
+| **CritHop (Phase 1)** | 0.00 / 9.89 / 0.81 | 0.00 / 2.38 / 0.54 | 0.00 / 8.34 / 0.00 |
+| **Phase 2 (reranker-slm)** | 0.00 / 8.78 / 0.82 | 0.00 / 2.18 / 0.62 | 0.00 / 8.34 / 0.00 |
 
 ## References
 

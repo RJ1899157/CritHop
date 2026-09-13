@@ -37,6 +37,12 @@ class Reranker:
 
     def __init__(self, adapter_path: str, max_length: int = 512):
         self.max_length = max_length
+        self._first_inference = True
+        if not adapter_path or not os.path.exists(os.path.expanduser(adapter_path)):
+            raise FileNotFoundError(
+                f"Reranker adapter path does not exist: {adapter_path}. "
+                "Please verify RERANKER_ADAPTER_PATH or pipeline/config.yaml."
+            )
         adapter_path = os.path.abspath(os.path.expanduser(adapter_path))
         config_path = os.path.join(adapter_path, "adapter_config.json")
         if not os.path.exists(config_path):
@@ -131,5 +137,8 @@ class Reranker:
         threshold: float = 0.7,
     ) -> bool:
         """Return whether class-1 relevance probability meets the threshold."""
+        if getattr(self, "_first_inference", True):
+            print("reranker-slm loaded, running inference")
+            self._first_inference = False
         scores = self._scores(query, [passage])
         return bool(scores and scores[0] >= threshold)

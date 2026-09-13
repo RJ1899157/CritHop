@@ -105,9 +105,36 @@ def evaluate(
 
     comparison = {}
     output = Path(output_path)
-    progress_path = output.with_suffix(".progress.json")
     if output.exists():
-        comparison = json.loads(output.read_text(encoding="utf-8"))
+        try:
+            comparison = json.loads(output.read_text(encoding="utf-8"))
+        except Exception:
+            comparison = {}
+
+    phase1_path = output.with_name("comparison_table.phase1.json")
+    phase2_path = output.with_name("comparison_table.phase2.json")
+    phase1_data = json.loads(phase1_path.read_text(encoding="utf-8")) if phase1_path.exists() else {}
+    phase2_data = json.loads(phase2_path.read_text(encoding="utf-8")) if phase2_path.exists() else {}
+
+    is_phase2 = os.getenv("USE_RERANKER", "false").lower() == "true"
+    target_method = "Phase 2 (reranker-slm)" if is_phase2 else "CritHop"
+
+    for ds_name in DATASET_NAMES:
+        if ds_name not in comparison:
+            comparison[ds_name] = {}
+        comparison[ds_name]["BM25"] = baselines.get(ds_name, {}).get("BM25")
+        comparison[ds_name]["BGE"] = baselines.get(ds_name, {}).get("BGE")
+        comparison[ds_name]["Self-RAG"] = _paper_entry("Self-RAG", ds_name)
+        comparison[ds_name]["HopRAG"] = _paper_entry("HopRAG", ds_name)
+
+        # Restore genuine Phase 1 scores if Phase 2 overwrote them or if missing
+        if ds_name in phase1_data and "CritHop" in phase1_data[ds_name]:
+            comparison[ds_name]["CritHop"] = phase1_data[ds_name]["CritHop"]
+        if "Phase 2 (reranker-slm)" not in comparison[ds_name] and ds_name in phase2_data and "Phase 2 (reranker-slm)" in phase2_data[ds_name]:
+            comparison[ds_name]["Phase 2 (reranker-slm)"] = phase2_data[ds_name]["Phase 2 (reranker-slm)"]
+
+    progress_file_name = f".{output.stem}.{('phase2' if is_phase2 else 'phase1')}.progress.json"
+    progress_path = output.parent / progress_file_name
     progress = (
         json.loads(progress_path.read_text(encoding="utf-8"))
         if progress_path.exists()
@@ -120,8 +147,10 @@ def evaluate(
     groq_rpm_buffer = float(config.get("groq_rpm_buffer", 0.5))
 
     for dataset_name in DATASET_NAMES:
-        if dataset_name in comparison:
+        existing_target = comparison.get(dataset_name, {}).get(target_method)
+        if existing_target is not None and existing_target.get("samples", 0) >= sample_count:
             continue
+
         examples = list(_load_split(dataset_name).select(range(sample_count)))
         dataset_progress = progress.get(dataset_name, {})
         processed = int(dataset_progress.get("processed", 0))
@@ -148,17 +177,20 @@ def evaluate(
                 on_example=save_example,
             )
 
-        comparison[dataset_name] = {
-            "BM25": baselines[dataset_name]["BM25"],
-            "BGE": baselines[dataset_name]["BGE"],
-            "Self-RAG": _paper_entry("Self-RAG", dataset_name),
-            "HopRAG": _paper_entry("HopRAG", dataset_name),
-            "CritHop": crithop_scores,
-        }
-        if os.getenv("USE_RERANKER", "false").lower() == "true":
-            comparison[dataset_name]["Phase 2 (reranker-slm)"] = crithop_scores
+        comparison[dataset_name][target_method] = crithop_scores
         output.parent.mkdir(parents=True, exist_ok=True)
         _write_json_atomic(output, comparison)
+
+        target_phase_path = phase2_path if is_phase2 else phase1_path
+        target_phase_data = json.loads(target_phase_path.read_text(encoding="utf-8")) if target_phase_path.exists() else {}
+        if dataset_name not in target_phase_data:
+            target_phase_data[dataset_name] = {}
+        target_phase_data[dataset_name]["BM25"] = baselines.get(dataset_name, {}).get("BM25")
+        target_phase_data[dataset_name]["BGE"] = baselines.get(dataset_name, {}).get("BGE")
+        target_phase_data[dataset_name]["Self-RAG"] = _paper_entry("Self-RAG", dataset_name)
+        target_phase_data[dataset_name]["HopRAG"] = _paper_entry("HopRAG", dataset_name)
+        target_phase_data[dataset_name][target_method] = crithop_scores
+        _write_json_atomic(target_phase_path, target_phase_data)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     _write_json_atomic(output, comparison)
@@ -179,17 +211,17 @@ def _print_table(comparison: dict) -> None:
     ]
     if any("Phase 2 (reranker-slm)" in item for item in comparison.values()):
         headers.append("Phase 2 (reranker-slm)")
-    print(" | ".join(headers))
-    print(" | ".join("---" for _ in headers))
+    print("| " + " | ".join(headers) + " |")
+    print("| " + " | ".join("---" for _ in headers) + " |")
     for dataset_name, methods in comparison.items():
         values = [dataset_name]
         for method in headers[1:]:
-            scores = methods.get(method, {"EM": None, "F1": None})
-            em = "—" if scores["EM"] is None else f"{scores['EM']:.2f}"
-            f1 = "—" if scores["F1"] is None else f"{scores['F1']:.2f}"
+            scores = methods.get(method) or {"EM": None, "F1": None}
+            em = "—" if scores.get("EM") is None else f"{scores['EM']:.2f}"
+            f1 = "—" if scores.get("F1") is None else f"{scores['F1']:.2f}"
             ndcg = "—" if scores.get("NDCG@10") is None else f"{scores['NDCG@10']:.2f}"
             values.append(f"EM={em}, F1={f1}, NDCG@10={ndcg}")
-        print(" | ".join(values))
+        print("| " + " | ".join(values) + " |")
 
 
 if __name__ == "__main__":
