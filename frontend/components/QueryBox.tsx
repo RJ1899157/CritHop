@@ -8,7 +8,7 @@ import { queryCritHop } from "@/lib/api";
 export default function QueryBox() {
   const router = useRouter();
   const [question, setQuestion] = useState("");
-  const [passages, setPassages] = useState("");
+  const [dataset, setDataset] = useState("hotpotqa");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -17,22 +17,14 @@ export default function QueryBox() {
     setError("");
 
     const normalizedQuestion = question.trim();
-    const normalizedPassages = passages
-      .split(/\n\s*\n/)
-      .map((passage) => passage.trim())
-      .filter(Boolean);
-
-    if (!normalizedQuestion || normalizedPassages.length === 0) {
-      setError("Enter a question and at least one passage.");
+    if (!normalizedQuestion) {
+      setError("Enter a question to continue.");
       return;
     }
 
     setIsLoading(true);
     try {
-      const result = await queryCritHop(
-        normalizedQuestion,
-        normalizedPassages,
-      );
+      const result = await queryCritHop(normalizedQuestion, dataset);
       sessionStorage.setItem("crithop-result", JSON.stringify(result));
       router.push("/results");
     } catch (requestError) {
@@ -62,19 +54,12 @@ export default function QueryBox() {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="passages" className="text-sm font-medium text-slate-200">
-          Context passages
-        </label>
-        <textarea
-          id="passages"
-          value={passages}
-          onChange={(event) => setPassages(event.target.value)}
-          placeholder="Paste passages separated by a blank line..."
-          className="min-h-52 w-full resize-y rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-400/20"
-        />
-        <p className="text-xs text-slate-500">
-          Separate each passage with one blank line.
-        </p>
+        <label htmlFor="dataset" className="text-sm font-medium text-slate-200">Dataset</label>
+        <select id="dataset" value={dataset} onChange={(event) => setDataset(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-400/20">
+          <option value="hotpotqa">HotpotQA</option>
+          <option value="musique">MuSiQue</option>
+          <option value="2wikimultihopqa">2WikiMultiHopQA</option>
+        </select>
       </div>
 
       {error && (

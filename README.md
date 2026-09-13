@@ -132,7 +132,7 @@ docker compose down
 
 ### Web UI
 
-Open http://localhost:3000, enter a question and passages, then submit. The results page displays the generated answer, supporting passages, critique decisions, and hop trace.
+Open http://localhost:3000, select a dataset, enter a question from that dataset, and submit. CritHop resolves the matching record and context server-side. The results page displays the generated answer, supporting passages, critique decisions, and hop trace.
 
 ### API
 
@@ -141,11 +141,7 @@ curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Which city hosted the event attended by the author of the paper?",
-    "passages": [
-      "The author attended an event in Paris.",
-      "The paper was written by Alex Morgan.",
-      "The event took place in Paris in 2024."
-    ]
+    "dataset": "hotpotqa"
   }'
 ~~~
 

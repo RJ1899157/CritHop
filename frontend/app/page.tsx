@@ -12,7 +12,7 @@ export default function HomePage() {
             Reason across evidence, one hop at a time.
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-slate-400">
-            CritHop combines semantic graph traversal with binary self-critique to find, support, and validate multi-hop answers.
+            Ask any multi-hop question. CritHop retrieves, traverses, critiques, and answers — grounded in HotpotQA, MuSiQue, and 2WikiMultiHopQA.
           </p>
           <div className="mt-8 flex gap-3 text-sm text-slate-500">
             <span>Graph traversal</span><span>·</span><span>Evidence critique</span><span>·</span><span>Grounded answers</span>

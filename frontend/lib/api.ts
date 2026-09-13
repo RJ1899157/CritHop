@@ -44,16 +44,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export function queryCritHop(
   question: string,
-  passages: string[],
+  dataset: string,
 ): Promise<QueryResult> {
   return request<QueryResult>("/query", {
     method: "POST",
-    body: JSON.stringify({ question, passages }),
+    body: JSON.stringify({ question, dataset }),
   });
 }
 
 export function getEvaluation(): Promise<ComparisonTable> {
   return request<ComparisonTable>("/eval");
+}
+
+export function runEvaluation(): Promise<{ status: string; message: string }> {
+  return request("/eval/run", { method: "POST" });
 }
 
 export function getHealth(): Promise<{
