@@ -9,50 +9,26 @@ import type { QueryResult } from "@/lib/api";
 
 export default function HomePage() {
   const router = useRouter();
-  const [result, setResult] = useState<QueryResult | null>(null);
   const [selectedQ, setSelectedQ] = useState("");
   const [selectedDs, setSelectedDs] = useState("hotpotqa");
 
   useEffect(() => {
+    // Clear any previous query results so the query page is always fresh
     try {
-      const stored = localStorage.getItem("crithop-result");
-      if (stored) {
-        setResult(JSON.parse(stored) as QueryResult);
-      }
+      localStorage.removeItem("crithop-result");
+      sessionStorage.removeItem("crithop-result");
     } catch {
       // ignore
     }
   }, []);
 
-  function handleResult(newResult: QueryResult) {
-    setResult(newResult);
+  function handleResult(_newResult: QueryResult) {
     // Smoothly transition to the dedicated Results tab
     router.push("/results");
   }
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12 space-y-12">
-      {/* Active Result Banner if user has previously queried */}
-      {result && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-3.5 shadow-lg backdrop-blur">
-          <div className="flex items-center gap-3">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <p className="text-xs text-slate-300">
-              <span className="font-semibold text-emerald-300">Active Result: </span>
-              <span className="text-white">&ldquo;{result.question}&rdquo;</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/results"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300"
-            >
-              <span>View in Results Tab</span>
-              <span>→</span>
-            </Link>
-          </div>
-        </div>
-      )}
 
       {/* Hero & Query Interface */}
       <div className="grid w-full gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">

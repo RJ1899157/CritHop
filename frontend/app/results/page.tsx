@@ -60,15 +60,34 @@ export default function ResultsPage() {
   useEffect(() => {
     setHasMounted(true);
     try {
+      // If the user refreshed/reloaded the page, lose track of the result
+      const navEntries =
+        typeof performance !== "undefined" && performance.getEntriesByType
+          ? performance.getEntriesByType("navigation")
+          : [];
+      const isReload =
+        (navEntries.length > 0 &&
+          (navEntries[0] as PerformanceNavigationTiming).type === "reload") ||
+        (typeof performance !== "undefined" &&
+          (performance as unknown as { navigation?: { type: number } }).navigation
+            ?.type === 1);
+
+      if (isReload) {
+        sessionStorage.removeItem("crithop-result");
+        localStorage.removeItem("crithop-result");
+        setResult(null);
+        return;
+      }
+
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         if (params.get("sample") === "true") {
           setResult(SAMPLE_RESULT);
-          localStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
+          sessionStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
           return;
         }
       }
-      const stored = localStorage.getItem("crithop-result");
+      const stored = sessionStorage.getItem("crithop-result");
       if (stored) {
         setResult(JSON.parse(stored) as QueryResult);
       }
@@ -79,7 +98,7 @@ export default function ResultsPage() {
 
   function loadSample() {
     setResult(SAMPLE_RESULT);
-    localStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
+    sessionStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
   }
 
   if (!hasMounted) {
@@ -151,8 +170,26 @@ export default function ResultsPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              try {
+                sessionStorage.removeItem("crithop-result");
+                localStorage.removeItem("crithop-result");
+              } catch {}
+              setResult(null);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2 text-xs font-medium text-rose-300 transition hover:bg-rose-400/20 hover:text-rose-200"
+          >
+            <span>Clear Result</span>
+          </button>
           <Link
             href="/"
+            onClick={() => {
+              try {
+                sessionStorage.removeItem("crithop-result");
+                localStorage.removeItem("crithop-result");
+              } catch {}
+            }}
             className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 shadow-md shadow-emerald-500/10"
           >
             <span>← Ask Another Question</span>
