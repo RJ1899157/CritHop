@@ -80,7 +80,7 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
     }
     const timer = setInterval(() => {
       setLoadingStageIdx((prev) => (prev + 1) % LOADING_STAGES.length);
-    }, 4500);
+    }, 1400);
     return () => clearInterval(timer);
   }, [isLoading]);
 

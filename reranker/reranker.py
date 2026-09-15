@@ -35,7 +35,7 @@ class _RerankerModel(nn.Module):
 class Reranker:
     """Score query-passage relevance using the trained reranker-slm adapter."""
 
-    def __init__(self, adapter_path: str, max_length: int = 192):
+    def __init__(self, adapter_path: str, max_length: int = 96):
         self.max_length = max_length
         self._first_inference = True
         self._score_cache: dict[tuple[str, str], float] = {}
@@ -104,7 +104,7 @@ class Reranker:
             num_threads = int(os.getenv("TORCH_NUM_THREADS", str(min(6, os.cpu_count() or 4))))
             torch.set_num_threads(num_threads)
 
-    def _scores(self, query: str, passages: list[str], batch_size: int = 4) -> list[float]:
+    def _scores(self, query: str, passages: list[str], batch_size: int = 12) -> list[float]:
         if not passages:
             return []
         if getattr(self, "_first_inference", True):

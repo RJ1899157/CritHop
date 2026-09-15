@@ -150,6 +150,18 @@ def _find_context(dataset: str, question: str) -> tuple[str, str, list[str]]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.crithop = CritHop(CONFIG_PATH)
+    try:
+        from retrieval.bge_retriever import load_embedding_model
+        load_embedding_model(
+            app.state.crithop.config.get("embedding_model", "BAAI/bge-base-en-v1.5"),
+            app.state.crithop.config.get("embedding_device", "cpu"),
+        )
+        if getattr(app.state.crithop, "reranker", None):
+            app.state.crithop.reranker._scores("warmup", ["warmup passage"], batch_size=1)
+        for ds in ("hotpotqa", "musique", "2wikimultihopqa"):
+            _get_dataset_records(ds)
+    except Exception:
+        pass
     yield
 
 
