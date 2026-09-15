@@ -7,6 +7,7 @@ import AnswerCard from "@/components/AnswerCard";
 import CritiquePanel from "@/components/CritiquePanel";
 import HopTrace from "@/components/HopTrace";
 import type { QueryResult } from "@/lib/api";
+import { useQueryResult } from "@/context/ResultContext";
 
 const SAMPLE_RESULT: QueryResult = {
   question: "Were Scott Derrickson and Ed Wood of the same nationality?",
@@ -54,45 +55,21 @@ const SAMPLE_RESULT: QueryResult = {
 };
 
 export default function ResultsPage() {
-  const [result, setResult] = useState<QueryResult | null>(null);
+  const { result, setResult } = useQueryResult();
   const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
     setHasMounted(true);
-    try {
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get("sample") === "true") {
-          setResult(SAMPLE_RESULT);
-          return;
-        }
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("sample") === "true") {
+        setResult(SAMPLE_RESULT);
       }
-
-      // If this was a fresh query submission, consume the token and display the result
-      const isFresh = sessionStorage.getItem("crithop-fresh");
-      if (isFresh === "1") {
-        sessionStorage.removeItem("crithop-fresh");
-        const stored = sessionStorage.getItem("crithop-result");
-        if (stored) {
-          setResult(JSON.parse(stored) as QueryResult);
-          return;
-        }
-      }
-
-      // If no fresh token (i.e. page was refreshed or visited directly), lose track of result
-      sessionStorage.removeItem("crithop-result");
-      try {
-        localStorage.removeItem("crithop-result");
-      } catch {}
-      setResult(null);
-    } catch {
-      // ignore parsing errors
     }
-  }, []);
+  }, [setResult]);
 
   function loadSample() {
     setResult(SAMPLE_RESULT);
-    sessionStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
   }
 
   if (!hasMounted) {
@@ -165,25 +142,14 @@ export default function ResultsPage() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => {
-              try {
-                sessionStorage.removeItem("crithop-result");
-                localStorage.removeItem("crithop-result");
-              } catch {}
-              setResult(null);
-            }}
+            onClick={() => setResult(null)}
             className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2 text-xs font-medium text-rose-300 transition hover:bg-rose-400/20 hover:text-rose-200"
           >
             <span>Clear Result</span>
           </button>
           <Link
             href="/"
-            onClick={() => {
-              try {
-                sessionStorage.removeItem("crithop-result");
-                localStorage.removeItem("crithop-result");
-              } catch {}
-            }}
+            onClick={() => setResult(null)}
             className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 shadow-md shadow-emerald-500/10"
           >
             <span>← Ask Another Question</span>

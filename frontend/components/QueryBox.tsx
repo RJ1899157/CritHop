@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { queryCritHop, type QueryResult } from "@/lib/api";
+import { useQueryResult } from "@/context/ResultContext";
 
 const SAMPLE_QUESTIONS: Record<string, string[]> = {
   hotpotqa: [
@@ -45,6 +46,7 @@ type QueryBoxProps = {
 
 export default function QueryBox({ onResult, initialQuestion, initialDataset }: QueryBoxProps) {
   const router = useRouter();
+  const { setResult } = useQueryResult();
   const [question, setQuestion] = useState(initialQuestion || "");
   const [dataset, setDataset] = useState(initialDataset || "hotpotqa");
   const [isLoading, setIsLoading] = useState(false);
@@ -99,11 +101,7 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
     setIsLoading(true);
     try {
       const result = await queryCritHop(normalizedQuestion, dataset);
-      sessionStorage.setItem("crithop-result", JSON.stringify(result));
-      sessionStorage.setItem("crithop-fresh", "1");
-      try {
-        localStorage.removeItem("crithop-result");
-      } catch {}
+      setResult(result);
       if (onResult) {
         onResult(result);
       } else {

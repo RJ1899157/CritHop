@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import { ResultProvider } from "@/context/ResultContext";
 
 export const metadata: Metadata = {
   title: "CritHop — Multi-hop QA",
@@ -11,8 +12,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning className="min-h-screen bg-slate-950 text-slate-100 antialiased">
-        <Navbar />
-        {children}
+        <ResultProvider>
+          <Navbar />
+          {children}
+        </ResultProvider>
       </body>
     </html>
   );
