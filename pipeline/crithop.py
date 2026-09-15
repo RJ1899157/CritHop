@@ -95,6 +95,7 @@ class CritHop:
                 context_passages,
                 self.config.get("embedding_model", "BAAI/bge-base-en-v1.5"),
                 self.config.get("embedding_device", "cpu"),
+                embeddings=getattr(self.graph, "embeddings", None),
             )
             self.hybrid = HybridRetriever(self.bm25, self.bge)
 

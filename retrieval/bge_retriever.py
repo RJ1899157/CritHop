@@ -22,15 +22,19 @@ class BGERetriever:
         passages: list[str],
         model_name: str,
         device: str = "cpu",
+        embeddings: np.ndarray | None = None,
     ):
         self.passages = passages
         self.model = load_embedding_model(model_name, device)
-        self.embeddings = self.model.encode(
-            passages,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
+        if embeddings is not None:
+            self.embeddings = embeddings
+        else:
+            self.embeddings = self.model.encode(
+                passages,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
 
     def retrieve(self, query: str, top_k: int) -> list[tuple[int, float]]:
         """Return the top passages as ``(index, cosine_score)`` pairs."""

@@ -28,7 +28,7 @@ def _wait_for_request_slot(client: Any) -> None:
     if not client.__class__.__module__.startswith("groq"):
         return
 
-    interval = float(os.getenv("GROQ_MIN_REQUEST_INTERVAL", "2.5"))
+    interval = float(os.getenv("GROQ_MIN_REQUEST_INTERVAL", "0.2"))
     with _THROTTLE_LOCK:
         now = time.monotonic()
         wait_seconds = interval - (now - _LAST_REQUEST_AT)

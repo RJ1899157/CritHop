@@ -31,12 +31,13 @@ class PassageGraph:
             self.graph = {"nodes": {}, "adjacency": {}}
             return self.graph
 
-        embeddings = self.model.encode(
+        self.embeddings = self.model.encode(
             self.passages,
             convert_to_numpy=True,
             normalize_embeddings=True,
             show_progress_bar=False,
         )
+        embeddings = self.embeddings
 
         nodes = {
             idx: {

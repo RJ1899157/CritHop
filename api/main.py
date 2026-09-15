@@ -33,44 +33,71 @@ class EvaluationRunResponse(BaseModel):
     message: str
 
 
-def _load_local_record(dataset: str, question: str) -> tuple[str, str, list[str]] | None:
-    """Find a question in a local JSON/JSONL split, if one is available."""
+_DATASET_CACHE: dict[str, list[dict]] = {}
+_EXACT_QUESTION_CACHE: dict[str, dict[str, tuple[str, str, list[str]]]] = {}
+
+
+def _get_dataset_records(dataset: str) -> list[dict]:
+    if dataset in _DATASET_CACHE:
+        return _DATASET_CACHE[dataset]
     dataset_dir = SPLITS_PATH / dataset
     if not dataset_dir.exists():
-        return None
-
+        return []
     candidates = sorted(
         path for path in dataset_dir.rglob("*")
         if path.suffix.lower() in {".json", ".jsonl"}
     )
-    normalized_question = question.strip().casefold()
-    records_cache = []
-
+    records: list[dict] = []
     for path in candidates:
         try:
             if path.suffix.lower() == ".jsonl":
-                records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+                with path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            records.append(json.loads(line))
             else:
                 loaded = json.loads(path.read_text(encoding="utf-8"))
-                records = loaded if isinstance(loaded, list) else loaded.get("data", loaded.get("records", []))
-            records_cache.extend(records)
-            for record in records:
-                q_text = str(record.get("question", record.get("query", ""))).strip().casefold()
-                if q_text == normalized_question:
-                    return _normalize_example(record)
-        except (OSError, json.JSONDecodeError, AttributeError, KeyError, TypeError):
+                recs = loaded if isinstance(loaded, list) else loaded.get("data", loaded.get("records", []))
+                records.extend(recs)
+        except Exception:
             continue
+    _DATASET_CACHE[dataset] = records
+    return records
+
+
+def _load_local_record(dataset: str, question: str) -> tuple[str, str, list[str]] | None:
+    """Find a question in cached local splits with O(1) retrieval."""
+    normalized_question = question.strip().casefold()
+    if dataset not in _EXACT_QUESTION_CACHE:
+        _EXACT_QUESTION_CACHE[dataset] = {}
+    if normalized_question in _EXACT_QUESTION_CACHE[dataset]:
+        return _EXACT_QUESTION_CACHE[dataset][normalized_question]
+
+    records = _get_dataset_records(dataset)
+    if not records:
+        return None
+
+    # 1. Exact match
+    for record in records:
+        q_text = str(record.get("question", record.get("query", ""))).strip().casefold()
+        if q_text == normalized_question:
+            res = _normalize_example(record)
+            _EXACT_QUESTION_CACHE[dataset][normalized_question] = res
+            return res
 
     # 2. Substring or token overlap match
     q_tokens = set(normalized_question.split())
     best_record = None
     best_overlap = 0
-    for record in records_cache:
+    for record in records:
         q_text = str(record.get("question", record.get("query", ""))).strip().casefold()
         if not q_text:
             continue
         if normalized_question in q_text or q_text in normalized_question:
-            return _normalize_example(record)
+            res = _normalize_example(record)
+            _EXACT_QUESTION_CACHE[dataset][normalized_question] = res
+            return res
         rec_tokens = set(q_text.split())
         overlap = len(q_tokens & rec_tokens)
         if overlap > best_overlap and overlap >= 3:
@@ -78,21 +105,24 @@ def _load_local_record(dataset: str, question: str) -> tuple[str, str, list[str]
             best_record = record
 
     if best_record is not None:
-        return _normalize_example(best_record)
+        res = _normalize_example(best_record)
+        _EXACT_QUESTION_CACHE[dataset][normalized_question] = res
+        return res
 
     # 3. Fallback: if query is arbitrary, retrieve top passages via BM25 across pre-indexed records
-    if records_cache:
-        all_passages = []
-        for r in records_cache[:500]:
-            _, _, p = _normalize_example(r)
-            all_passages.extend(p)
-        if all_passages:
-            from retrieval.bm25_retriever import BM25Retriever
-            bm25 = BM25Retriever(all_passages)
-            top_results = bm25.retrieve(question, top_k=10)
-            retrieved_passages = [all_passages[idx] for idx, _ in top_results]
-            if retrieved_passages:
-                return question, "", retrieved_passages
+    all_passages = []
+    for r in records[:500]:
+        _, _, p = _normalize_example(r)
+        all_passages.extend(p)
+    if all_passages:
+        from retrieval.bm25_retriever import BM25Retriever
+        bm25 = BM25Retriever(all_passages)
+        top_results = bm25.retrieve(question, top_k=10)
+        retrieved_passages = [all_passages[idx] for idx, _ in top_results]
+        if retrieved_passages:
+            res = (question, "", retrieved_passages)
+            _EXACT_QUESTION_CACHE[dataset][normalized_question] = res
+            return res
 
     return None
 

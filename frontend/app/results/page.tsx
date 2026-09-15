@@ -60,37 +60,31 @@ export default function ResultsPage() {
   useEffect(() => {
     setHasMounted(true);
     try {
-      // If the user refreshed/reloaded the page, lose track of the result
-      const navEntries =
-        typeof performance !== "undefined" && performance.getEntriesByType
-          ? performance.getEntriesByType("navigation")
-          : [];
-      const isReload =
-        (navEntries.length > 0 &&
-          (navEntries[0] as PerformanceNavigationTiming).type === "reload") ||
-        (typeof performance !== "undefined" &&
-          (performance as unknown as { navigation?: { type: number } }).navigation
-            ?.type === 1);
-
-      if (isReload) {
-        sessionStorage.removeItem("crithop-result");
-        localStorage.removeItem("crithop-result");
-        setResult(null);
-        return;
-      }
-
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         if (params.get("sample") === "true") {
           setResult(SAMPLE_RESULT);
-          sessionStorage.setItem("crithop-result", JSON.stringify(SAMPLE_RESULT));
           return;
         }
       }
-      const stored = sessionStorage.getItem("crithop-result");
-      if (stored) {
-        setResult(JSON.parse(stored) as QueryResult);
+
+      // If this was a fresh query submission, consume the token and display the result
+      const isFresh = sessionStorage.getItem("crithop-fresh");
+      if (isFresh === "1") {
+        sessionStorage.removeItem("crithop-fresh");
+        const stored = sessionStorage.getItem("crithop-result");
+        if (stored) {
+          setResult(JSON.parse(stored) as QueryResult);
+          return;
+        }
       }
+
+      // If no fresh token (i.e. page was refreshed or visited directly), lose track of result
+      sessionStorage.removeItem("crithop-result");
+      try {
+        localStorage.removeItem("crithop-result");
+      } catch {}
+      setResult(null);
     } catch {
       // ignore parsing errors
     }
