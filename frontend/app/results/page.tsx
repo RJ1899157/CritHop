@@ -11,47 +11,73 @@ import { useQueryResult } from "@/context/ResultContext";
 
 const SAMPLE_RESULT: QueryResult = {
   question: "Were Scott Derrickson and Ed Wood of the same nationality?",
-  answer: "Yes. Both Scott Derrickson and Ed Wood are American.",
+  answer: "Yes. Both Scott Derrickson and Ed Wood are American filmmakers. Scott Derrickson was born in Los Angeles, California, and Ed Wood was born in Poughkeepsie, New York.",
   hop_trace: [
     {
       hop: 1,
-      passages_considered: [3, 4, 5, 6, 7, 9, 0, 1, 8],
-      isrel_decisions: { "3": false, "4": false, "5": false, "6": false, "7": false, "9": false, "0": false, "1": false, "8": false },
+      passages_considered: [0, 1, 3, 4, 8],
+      isrel_decisions: { "0": true, "1": true, "3": false, "4": true, "8": false },
       reasoning_step: "Were Scott Derrickson and Ed Wood of the same nationality?",
-      selected_passages: [1],
-      next_node: null,
-      llm_reasoning_step: "Find Ed Wood's nationality in the next passage and compare it to Scott Derrickson's nationality (American) to determine if they share the same nationality."
+      selected_passages: [0],
+      next_node: 4,
+      llm_reasoning_step: "Passage #0 confirms Scott Derrickson is American. Now search for Ed Wood's nationality in adjacent passages."
     },
     {
       hop: 2,
-      passages_considered: [3, 4, 5, 6, 7, 9],
-      isrel_decisions: { "3": false, "4": false, "5": false, "6": false, "7": false, "9": false },
-      reasoning_step: "Find Ed Wood's nationality in the next passage and compare it to Scott Derrickson's nationality (American) to determine if they share the same nationality.",
-      selected_passages: [4],
-      next_node: 4,
-      llm_reasoning_step: "Identify Ed Wood's nationality from passage 4 (American) and compare it to Scott Derrickson's nationality (American) to see if they match."
+      passages_considered: [1, 2, 5, 6, 7],
+      isrel_decisions: { "1": true, "2": false, "5": false, "6": false, "7": false },
+      reasoning_step: "Find Ed Wood's nationality and compare it to Scott Derrickson's nationality (American).",
+      selected_passages: [1],
+      next_node: 1,
+      llm_reasoning_step: "Passage #1 confirms Ed Wood was an American filmmaker. Both subjects share American nationality."
     },
     {
       hop: 3,
-      passages_considered: [0, 1, 8],
-      isrel_decisions: { "0": false, "1": false, "8": false },
-      reasoning_step: "Identify Ed Wood's nationality from passage 4 (American) and compare it to Scott Derrickson's nationality (American) to see if they match.",
-      selected_passages: [0],
+      passages_considered: [0, 1, 4],
+      isrel_decisions: { "0": true, "1": true, "4": true },
+      reasoning_step: "Verify consistency across biographical passages for Scott Derrickson (#0) and Ed Wood (#1).",
+      selected_passages: [4],
       next_node: null,
-      llm_reasoning_step: "Locate Ed Wood's nationality in passage 4 to determine if it matches Scott Derrickson's nationality."
+      llm_reasoning_step: "Both subjects are confirmed American. Synthesize final grounded answer."
     }
   ],
   critique_log: {
-    isrel_decisions: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+    isrel_decisions: [true, true, false, true, false, true, false, false, false, false],
     issup_decisions: [true, true, true],
     isuse_decision: true
   },
   supporting_passages: [
     "Scott Derrickson: Scott Derrickson (born July 16, 1966) is an American director, screenwriter and producer. He lives in Los Angeles, California. He is best known for directing horror films such as \"Sinister\", \"The Exorcism of Emily Rose\", and \"Deliver Us From Evil\", as well as the 2016 Marvel Cinematic Universe installment, \"Doctor Strange.\"",
-    "Ed Wood: Edward Davis Wood Jr. (October 10, 1924 – December 10, 1978) was an American filmmaker, actor, writer, producer, and director.",
-    "Ed Wood (film): Ed Wood is a 1994 American biographical period comedy-drama film directed and produced by Tim Burton, and starring Johnny Depp as cult filmmaker Ed Wood."
+    "Ed Wood: Edward Davis Wood Jr. (October 10, 1924 – December 10, 1978) was an American filmmaker, actor, writer, producer, and director. Wood directed several low-budget science fiction and horror films.",
+    "Doctor Strange (film): Doctor Strange is a 2016 American superhero film directed by Scott Derrickson from a screenplay he wrote with Jon Spaihts and C. Robert Cargill."
   ],
-  retrieval_retry: false
+  retrieval_retry: false,
+  graph_data: {
+    nodes: [
+      { id: 0, title: "Scott Derrickson", snippet: "Scott Derrickson (born July 16, 1966) is an American director...", text: "Scott Derrickson (born July 16, 1966) is an American director, screenwriter and producer. He lives in Los Angeles, California. He is best known for directing horror films such as Sinister, The Exorcism of Emily Rose, and Doctor Strange." },
+      { id: 1, title: "Ed Wood", snippet: "Edward Davis Wood Jr. was an American filmmaker, actor, writer...", text: "Edward Davis Wood Jr. (October 10, 1924 – December 10, 1978) was an American filmmaker, actor, writer, producer, and director. In the 1950s, Wood directed several low-budget science fiction and horror films." },
+      { id: 2, title: "Ed Wood (film)", snippet: "Ed Wood is a 1994 American biographical period comedy-drama film...", text: "Ed Wood is a 1994 American biographical period comedy-drama film directed and produced by Tim Burton, and starring Johnny Depp as cult filmmaker Ed Wood." },
+      { id: 3, title: "Sinister (film)", snippet: "Sinister is a 2012 supernatural horror film directed by Scott Derrickson...", text: "Sinister is a 2012 supernatural horror film directed by Scott Derrickson and written by C. Robert Cargill and Derrickson." },
+      { id: 4, title: "Doctor Strange (film)", snippet: "Doctor Strange is a 2016 American superhero film based on Marvel Comics...", text: "Doctor Strange is a 2016 American superhero film directed by Scott Derrickson from a screenplay he wrote with Jon Spaihts and C. Robert Cargill." },
+      { id: 5, title: "Plan 9 from Outer Space", snippet: "Plan 9 from Outer Space is a 1959 American independent science fiction film...", text: "Plan 9 from Outer Space is a 1959 American independent science fiction horror film written, produced, directed, and edited by Ed Wood." },
+      { id: 6, title: "Glen or Glenda", snippet: "Glen or Glenda is a 1953 American docudrama film written and directed by Ed Wood...", text: "Glen or Glenda is a 1953 American docudrama film written, directed by, and starring Ed Wood, featuring Bela Lugosi." },
+      { id: 7, title: "Bride of the Monster", snippet: "Bride of the Monster is a 1955 American science fiction horror film...", text: "Bride of the Monster is a 1955 American science fiction horror film directed and co-written by Edward D. Wood Jr." },
+      { id: 8, title: "The Exorcism of Emily Rose", snippet: "The Exorcism of Emily Rose is a 2005 American supernatural horror legal drama...", text: "The Exorcism of Emily Rose is a 2005 American supernatural horror legal drama film directed by Scott Derrickson." },
+      { id: 9, title: "Deliver Us from Evil", snippet: "Deliver Us from Evil is a 2014 American supernatural horror film directed by Scott Derrickson...", text: "Deliver Us from Evil is a 2014 American supernatural horror film directed by Scott Derrickson and produced by Jerry Bruckheimer." }
+    ],
+    edges: [
+      { source: 0, target: 3, weight: 0.85 },
+      { source: 0, target: 4, weight: 0.92 },
+      { source: 0, target: 8, weight: 0.88 },
+      { source: 0, target: 9, weight: 0.81 },
+      { source: 1, target: 2, weight: 0.90 },
+      { source: 1, target: 5, weight: 0.87 },
+      { source: 1, target: 6, weight: 0.83 },
+      { source: 1, target: 7, weight: 0.84 },
+      { source: 0, target: 1, weight: 0.76 },
+      { source: 4, target: 1, weight: 0.72 }
+    ]
+  }
 };
 
 export default function ResultsPage() {

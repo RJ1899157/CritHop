@@ -51,6 +51,33 @@ export default function HopTrace({
     }
   }, []);
 
+  // Lock document body scroll when fullscreen is active
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isFullscreen]);
+
+  // Handle ESC key for fullscreen and modals
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (selectedNode) {
+          setSelectedNode(null);
+        } else if (isFullscreen) {
+          setIsFullscreen(false);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedNode, isFullscreen]);
+
   // Stabilize frame change notification callback
   const handleFrameChange = useCallback((frame: PlaybackFrame) => {
     setActiveFrame((prev) => (prev?.stepIndex === frame.stepIndex ? prev : frame));
@@ -341,24 +368,45 @@ export default function HopTrace({
         </div>
       </div>
 
-      {/* Main Content in normal view */}
-      {viewContent}
+      {/* Main Content: render inline when not fullscreen */}
+      {!isFullscreen ? (
+        viewContent
+      ) : (
+        <div className="flex flex-col items-center justify-center p-12 rounded-2xl border border-cyan-500/20 bg-black/40 text-center space-y-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-300 font-mono text-xl animate-pulse">
+            ⛶
+          </div>
+          <h4 className="text-base font-bold text-white">Expanded to Fullscreen Studio</h4>
+          <p className="max-w-md text-xs text-slate-400">
+            Interactive canvas running in maximized viewport. Press <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-cyan-300 font-mono text-[11px]">ESC</kbd> or click below to return.
+          </p>
+          <button
+            onClick={() => setIsFullscreen(false)}
+            className="rounded-xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-1.5 text-xs font-mono font-bold text-cyan-300 hover:bg-cyan-500/20 transition"
+          >
+            ✕ Exit Fullscreen
+          </button>
+        </div>
+      )}
 
-      {/* Fullscreen Portal into document.body to prevent stacking context or backdrop-blur clipping */}
+      {/* Fullscreen Portal into document.body - ONLY rendered when isFullscreen is true */}
       {mounted && isFullscreen && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-[#030508] p-6 overflow-y-auto flex flex-col justify-between animate-in fade-in duration-200">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+        <div className="fixed inset-0 z-[9999] bg-[#030508]/98 p-6 backdrop-blur-2xl overflow-y-auto flex flex-col justify-between animate-in fade-in duration-200">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
             <div className="flex items-center gap-3">
               <span className="h-3 w-3 rounded-full bg-cyan-400 animate-pulse" />
               <h3 className="text-xl font-mono font-bold text-white">
                 CritHop Knowledge Universe · Fullscreen Studio
               </h3>
+              <span className="hidden sm:inline-block rounded-full border border-white/10 bg-white/5 px-3 py-0.5 text-xs font-mono text-slate-400">
+                Press [ESC] to exit
+              </span>
             </div>
             <button
               onClick={() => setIsFullscreen(false)}
-              className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-xs font-mono font-bold text-white hover:bg-white/20 transition"
+              className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-xs font-mono font-bold text-white hover:bg-white/20 transition flex items-center gap-1.5"
             >
-              ✕ Exit Fullscreen
+              <span>✕</span> Exit Fullscreen
             </button>
           </div>
 

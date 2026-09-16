@@ -327,50 +327,191 @@ export default function ReasoningGraph2D({
         ctx.stroke();
       }
 
-      // Draw Edges
+      // Collect explicit traversal edges from playbackFrame or consecutive traversed nodes
+      const activeTraversalEdges: Array<{ source: number; target: number; stepNum?: number }> = [];
+      if (playbackFrame?.traversalEdges && playbackFrame.traversalEdges.length > 0) {
+        playbackFrame.traversalEdges.forEach((e, idx) => {
+          activeTraversalEdges.push({ ...e, stepNum: idx + 1 });
+        });
+      } else if (traversedSet.size >= 2) {
+        const travArr = Array.from(traversedSet);
+        for (let i = 0; i < travArr.length - 1; i++) {
+          activeTraversalEdges.push({ source: travArr[i], target: travArr[i + 1], stepNum: i + 1 });
+        }
+      }
+
+      const traversalEdgeKeySet = new Set(
+        activeTraversalEdges.map((e) => `${Math.min(e.source, e.target)}-${Math.max(e.source, e.target)}`)
+      );
+
+      // 1. Draw Base Semantic Similarity Edges
       for (const edge of edges) {
         const source = nodeIndexMap.get(edge.source);
         const target = nodeIndexMap.get(edge.target);
         if (!source || !target) continue;
 
-        const isBothTraversed = source.isTraversed && target.isTraversed;
+        const key = `${Math.min(edge.source, edge.target)}-${Math.max(edge.source, edge.target)}`;
+        if (traversalEdgeKeySet.has(key)) continue; // Traversal edges rendered in dedicated high-energy pass
+
         const isSupportingLink = source.isSupporting && target.isSupporting;
+        const isCandidateLink =
+          (source.isTraversed && target.isCandidate) || (target.isTraversed && source.isCandidate);
 
         ctx.beginPath();
         ctx.moveTo(source.x, source.y);
         ctx.lineTo(target.x, target.y);
 
         if (isSupportingLink) {
-          ctx.strokeStyle = "rgba(16, 185, 129, 0.7)";
+          ctx.strokeStyle = "rgba(16, 185, 129, 0.75)";
           ctx.lineWidth = 2.5;
           ctx.shadowColor = "rgba(16, 185, 129, 0.8)";
           ctx.shadowBlur = 8;
-        } else if (isBothTraversed) {
-          ctx.strokeStyle = "rgba(168, 85, 247, 0.7)";
-          ctx.lineWidth = 2;
-          ctx.shadowColor = "rgba(168, 85, 247, 0.8)";
+          ctx.setLineDash([]);
+        } else if (isCandidateLink) {
+          ctx.strokeStyle = "rgba(0, 240, 255, 0.45)";
+          ctx.lineWidth = 1.6;
+          ctx.shadowColor = "rgba(0, 240, 255, 0.6)";
           ctx.shadowBlur = 6;
+          ctx.setLineDash([5, 4]);
+          ctx.lineDashOffset = -localPulse * 16;
         } else {
-          ctx.strokeStyle = "rgba(0, 240, 255, 0.15)";
+          ctx.strokeStyle = "rgba(0, 240, 255, 0.12)";
           ctx.lineWidth = 1;
           ctx.shadowBlur = 0;
+          ctx.setLineDash([]);
         }
 
         ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.shadowBlur = 0;
 
-        // Traveling photon pulse along traversed edges
-        if (isBothTraversed || isSupportingLink) {
-          const t = (localPulse * 0.8) % 1;
+        // Flowing green photons along supporting evidence links
+        if (isSupportingLink) {
+          const t = (localPulse * 0.7) % 1;
           const px = source.x + (target.x - source.x) * t;
           const py = source.y + (target.y - source.y) * t;
 
           ctx.beginPath();
-          ctx.arc(px, py, 3, 0, Math.PI * 2);
-          ctx.fillStyle = isSupportingLink ? "#10b981" : "#c084fc";
-          ctx.shadowColor = isSupportingLink ? "#10b981" : "#c084fc";
+          ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+          ctx.fillStyle = "#34d399";
+          ctx.shadowColor = "#10b981";
           ctx.shadowBlur = 10;
           ctx.fill();
         }
+      }
+
+      // 2. Dedicated High-Energy Traversal Laser Beams Pass
+      for (const tEdge of activeTraversalEdges) {
+        const source = nodeIndexMap.get(tEdge.source);
+        const target = nodeIndexMap.get(tEdge.target);
+        if (!source || !target) continue;
+
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ux = dx / dist;
+        const uy = dy / dist;
+
+        // Start and end points slightly offset by node radii
+        const startX = source.x + ux * source.radius;
+        const startY = source.y + uy * source.radius;
+        const endX = target.x - ux * target.radius;
+        const endY = target.y - uy * target.radius;
+
+        // Outer Neon Glow Halo
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = "rgba(192, 132, 252, 0.35)";
+        ctx.lineWidth = 9;
+        ctx.shadowColor = "#a855f7";
+        ctx.shadowBlur = 18;
+        ctx.stroke();
+
+        // High-Energy Core Laser Beam
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = "#c084fc";
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = "#d946ef";
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+
+        // Hyper-bright Central White Filament
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.2;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+        ctx.restore();
+
+        // Flowing Tri-Photon Packets with Energy Trails
+        for (let p = 0; p < 3; p++) {
+          const t = ((localPulse * 0.75 + p * 0.33) % 1);
+          const px = startX + (endX - startX) * t;
+          const py = startY + (endY - startY) * t;
+
+          // Photon Head
+          ctx.beginPath();
+          ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = p === 0 ? "#ffffff" : "#e879f9";
+          ctx.shadowColor = "#c084fc";
+          ctx.shadowBlur = 12;
+          ctx.fill();
+
+          // Photon Comet Tail
+          const tailLen = 14;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px - ux * tailLen, py - uy * tailLen);
+          ctx.strokeStyle = "rgba(232, 121, 249, 0.6)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // Directional Chevron Arrow (pointing from source to target)
+        const midT = 0.55;
+        const arrowX = startX + (endX - startX) * midT;
+        const arrowY = startY + (endY - startY) * midT;
+        const arrowSize = 7;
+        const perpX = -uy * arrowSize;
+        const perpY = ux * arrowSize;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(arrowX - ux * arrowSize + perpX, arrowY - uy * arrowSize + perpY);
+        ctx.lineTo(arrowX, arrowY);
+        ctx.lineTo(arrowX - ux * arrowSize - perpX, arrowY - uy * arrowSize - perpY);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.2;
+        ctx.shadowColor = "#a855f7";
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+
+        // Hop Transition Badge on Edge
+        const badgeX = startX + (endX - startX) * 0.35;
+        const badgeY = startY + (endY - startY) * 0.35;
+        const badgeText = tEdge.stepNum ? `Hop ${tEdge.stepNum}➔${tEdge.stepNum + 1}` : "Traversal";
+
+        ctx.font = "bold 9px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const txtWidth = ctx.measureText(badgeText).width + 8;
+
+        ctx.fillStyle = "rgba(10, 6, 20, 0.85)";
+        ctx.strokeStyle = "rgba(192, 132, 252, 0.7)";
+        ctx.lineWidth = 1;
+        ctx.roundRect(badgeX - txtWidth / 2, badgeY - 7, txtWidth, 14, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#e9d5ff";
+        ctx.fillText(badgeText, badgeX, badgeY);
+        ctx.restore();
       }
 
       // Draw Nodes
@@ -378,13 +519,34 @@ export default function ReasoningGraph2D({
         const isHovered = hoveredNode?.id === node.id;
         const radius = node.radius + (isHovered ? 4 : 0);
 
+        // Radar ping sonar ripples for active candidates
+        if (node.isCandidate) {
+          ctx.save();
+          const ripple1 = (localPulse * 22) % 32;
+          const alpha1 = Math.max(0, 1 - ripple1 / 32);
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, radius + ripple1, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(0, 240, 255, ${alpha1 * 0.75})`;
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+
+          const ripple2 = (localPulse * 22 + 16) % 32;
+          const alpha2 = Math.max(0, 1 - ripple2 / 32);
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, radius + ripple2, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(0, 240, 255, ${alpha2 * 0.75})`;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          ctx.restore();
+        }
+
         ctx.save();
 
         // Glowing outer halo
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.shadowColor = node.glowColor;
-        ctx.shadowBlur = node.isSupporting ? 18 : node.isTraversed ? 14 : 8;
+        ctx.shadowBlur = node.isSupporting ? 20 : node.isTraversed ? 16 : node.isCandidate ? 12 : 6;
 
         // Node fill
         const grad = ctx.createRadialGradient(
@@ -405,6 +567,9 @@ export default function ReasoningGraph2D({
         } else if (node.isPruned) {
           grad.addColorStop(0, "rgba(244, 63, 94, 0.4)");
           grad.addColorStop(1, "rgba(76, 5, 25, 0.6)");
+        } else if (node.isKept) {
+          grad.addColorStop(0, "#34d399");
+          grad.addColorStop(1, "#047857");
         } else {
           grad.addColorStop(0, "#22d3ee");
           grad.addColorStop(1, "#0e7490");
@@ -414,13 +579,15 @@ export default function ReasoningGraph2D({
         ctx.fill();
 
         // Node border
-        ctx.lineWidth = node.isSupporting ? 2.5 : 1.5;
+        ctx.lineWidth = node.isSupporting ? 2.8 : isHovered ? 2.5 : 1.5;
         ctx.strokeStyle = node.isSupporting
           ? "#6ee7b7"
           : node.isTraversed
           ? "#e9d5ff"
           : node.isPruned
           ? "#fca5a5"
+          : node.isKept
+          ? "#a7f3d0"
           : "#67e8f9";
 
         if (node.isPruned) {
@@ -438,6 +605,29 @@ export default function ReasoningGraph2D({
         ctx.textBaseline = "middle";
         ctx.fillText(String(node.id), node.x, node.y);
 
+        // Status Badge at top right of node
+        ctx.save();
+        if (node.isSupporting) {
+          ctx.font = "bold 11px sans-serif";
+          ctx.fillStyle = "#fef08a";
+          ctx.shadowColor = "#eab308";
+          ctx.shadowBlur = 6;
+          ctx.fillText("★", node.x + radius * 0.7, node.y - radius * 0.7);
+        } else if (node.isPruned) {
+          ctx.font = "bold 11px sans-serif";
+          ctx.fillStyle = "#f43f5e";
+          ctx.shadowColor = "#881337";
+          ctx.shadowBlur = 6;
+          ctx.fillText("✕", node.x + radius * 0.7, node.y - radius * 0.7);
+        } else if (node.isKept) {
+          ctx.font = "bold 11px sans-serif";
+          ctx.fillStyle = "#34d399";
+          ctx.shadowColor = "#059669";
+          ctx.shadowBlur = 6;
+          ctx.fillText("✓", node.x + radius * 0.7, node.y - radius * 0.7);
+        }
+        ctx.restore();
+
         // Title label underneath
         ctx.font = "10px sans-serif";
         ctx.fillStyle = isHovered ? "#38bdf8" : "rgba(226, 232, 240, 0.85)";
@@ -445,14 +635,83 @@ export default function ReasoningGraph2D({
         ctx.textBaseline = "top";
 
         const titleText = node.title.length > 18 ? `${node.title.slice(0, 16)}…` : node.title;
-        ctx.fillText(titleText, node.x, node.y + radius + 4);
+        ctx.fillText(titleText, node.x, node.y + radius + 5);
 
-        // Hop badge
+        // Hop / Candidate tag badge above node
         if (node.hopNumber) {
-          ctx.fillStyle = "#a855f7";
+          ctx.fillStyle = "#c084fc";
           ctx.font = "bold 9px monospace";
           ctx.fillText(`HOP ${node.hopNumber}`, node.x, node.y - radius - 12);
+        } else if (node.isCandidate) {
+          ctx.fillStyle = "#38bdf8";
+          ctx.font = "bold 8px monospace";
+          ctx.fillText("SCANNING", node.x, node.y - radius - 11);
         }
+      }
+
+      // Draw Tooltip Card for hovered node
+      if (hoveredNode) {
+        ctx.save();
+        const cardW = 220;
+        const cardH = 74;
+        let cardX = hoveredNode.x + hoveredNode.radius + 14;
+        let cardY = hoveredNode.y - cardH / 2;
+
+        if (cardX + cardW > w - 20) {
+          cardX = hoveredNode.x - hoveredNode.radius - cardW - 14;
+        }
+        if (cardY < 10) cardY = 10;
+        if (cardY + cardH > h - 10) cardY = h - cardH - 10;
+
+        ctx.fillStyle = "rgba(4, 7, 15, 0.92)";
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
+        ctx.lineWidth = 1;
+        ctx.shadowColor = "rgba(56, 189, 248, 0.3)";
+        ctx.shadowBlur = 12;
+        ctx.roundRect(cardX, cardY, cardW, cardH, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        // Card Title
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 11px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        const titleLine = hoveredNode.title.length > 26 ? `${hoveredNode.title.slice(0, 24)}...` : hoveredNode.title;
+        ctx.fillText(titleLine, cardX + 10, cardY + 10);
+
+        // Card Status
+        ctx.font = "9px monospace";
+        let statusColor = "#38bdf8";
+        let statusText = "● Candidate Node";
+        if (hoveredNode.isSupporting) {
+          statusColor = "#34d399";
+          statusText = "★ Supporting Evidence";
+        } else if (hoveredNode.isTraversed) {
+          statusColor = "#c084fc";
+          statusText = `● Traversed Hop ${hoveredNode.hopNumber ?? ""}`;
+        } else if (hoveredNode.isPruned) {
+          statusColor = "#f43f5e";
+          statusText = "✕ Pruned by IsREL";
+        } else if (hoveredNode.isKept) {
+          statusColor = "#34d399";
+          statusText = "✓ Kept by IsREL";
+        }
+
+        ctx.fillStyle = statusColor;
+        ctx.fillText(statusText, cardX + 10, cardY + 27);
+
+        // Snippet snippet
+        ctx.font = "9px sans-serif";
+        ctx.fillStyle = "#94a3b8";
+        const snip = (hoveredNode.snippet || hoveredNode.text || "").slice(0, 48);
+        ctx.fillText(`${snip}...`, cardX + 10, cardY + 44);
+
+        ctx.fillStyle = "#0284c7";
+        ctx.font = "8px monospace";
+        ctx.fillText("Click to inspect full passage", cardX + 10, cardY + 58);
+        ctx.restore();
       }
 
       ctx.restore();
@@ -537,22 +796,32 @@ export default function ReasoningGraph2D({
     isPanningRef.current = false;
   }
 
-  function handleWheel(e: React.WheelEvent) {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+  // Native non-passive wheel zoom handler prevents page jumping/scrolling
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
 
-    const current = transformRef.current;
-    const newScale = Math.min(Math.max(current.scale * zoomFactor, 0.4), 3.0);
+    function handleNativeWheel(e: WheelEvent) {
+      e.preventDefault();
+      if (!canvas) return;
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
-    current.x = mouseX - (mouseX - current.x) * (newScale / current.scale);
-    current.y = mouseY - (mouseY - current.y) * (newScale / current.scale);
-    current.scale = newScale;
-  }
+      const current = transformRef.current;
+      const newScale = Math.min(Math.max(current.scale * zoomFactor, 0.35), 3.5);
+
+      current.x = mouseX - (mouseX - current.x) * (newScale / current.scale);
+      current.y = mouseY - (mouseY - current.y) * (newScale / current.scale);
+      current.scale = newScale;
+    }
+
+    canvas.addEventListener("wheel", handleNativeWheel, { passive: false });
+    return () => {
+      canvas.removeEventListener("wheel", handleNativeWheel);
+    };
+  }, []);
 
   function handleResetView() {
     transformRef.current = { x: 0, y: 0, scale: 1 };
@@ -628,7 +897,6 @@ export default function ReasoningGraph2D({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         className="cursor-grab active:cursor-grabbing block w-full select-none"
       />
 

@@ -26,6 +26,11 @@ export default function ReasoningGraph3D({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const nodeMeshesRef = useRef<Map<number, { mesh: THREE.Mesh; label: THREE.Sprite }>>(new Map());
+  const nodePositionsRef = useRef<Map<number, THREE.Vector3>>(new Map());
+  const traversalGroupRef = useRef<THREE.Group | null>(null);
+  const candidateRingsGroupRef = useRef<THREE.Group | null>(null);
+  const photonsRef = useRef<Array<{ p1: THREE.Vector3; p2: THREE.Vector3; mesh: THREE.Mesh; offset: number }>>([]);
+  const pointerDownPosRef = useRef({ x: 0, y: 0 });
   const onSelectNodeRef = useRef(onSelectNode);
 
   const [autoRotate, setAutoRotate] = useState(true);
@@ -239,8 +244,9 @@ export default function ReasoningGraph3D({
     });
 
     nodeMeshesRef.current = nodeMap;
+    nodePositionsRef.current = nodePositions;
 
-    // 6. Connect Edges
+    // 6. Connect Base Similarity Edges
     const edges = graphData.edges;
     const edgeLinePositions: number[] = [];
     const edgeColors: number[] = [];
@@ -251,7 +257,7 @@ export default function ReasoningGraph3D({
       if (!p1 || !p2) return;
 
       edgeLinePositions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-      edgeColors.push(0.0, 0.6, 0.7, 0.0, 0.6, 0.7);
+      edgeColors.push(0.0, 0.5, 0.6, 0.0, 0.5, 0.6);
     });
 
     if (edgeLinePositions.length > 0) {
@@ -261,19 +267,38 @@ export default function ReasoningGraph3D({
       const edgeMat = new THREE.LineBasicMaterial({
         vertexColors: true,
         transparent: true,
-        opacity: 0.35,
+        opacity: 0.25,
         linewidth: 1,
       });
       const lines = new THREE.LineSegments(edgeGeo, edgeMat);
       scene.add(lines);
     }
 
-    // 7. Raycaster for Selection
+    // 7. Dynamic Traversal Lasers & Candidate Rings Groups
+    const traversalGroup = new THREE.Group();
+    scene.add(traversalGroup);
+    traversalGroupRef.current = traversalGroup;
+
+    const candidateRingsGroup = new THREE.Group();
+    scene.add(candidateRingsGroup);
+    candidateRingsGroupRef.current = candidateRingsGroup;
+
+    // 8. Safe Raycaster for Selection (Distinguishes Drag/Orbit from Click)
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    function handleClick(e: MouseEvent) {
+    function handlePointerDown(e: PointerEvent) {
+      pointerDownPosRef.current = { x: e.clientX, y: e.clientY };
+    }
+
+    function handlePointerUp(e: PointerEvent) {
       if (!container) return;
+      const dist = Math.hypot(
+        e.clientX - pointerDownPosRef.current.x,
+        e.clientY - pointerDownPosRef.current.y
+      );
+      if (dist > 6) return; // User was dragging to orbit the camera, ignore!
+
       const rect = container.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -291,13 +316,37 @@ export default function ReasoningGraph3D({
       }
     }
 
-    renderer.domElement.addEventListener("click", handleClick);
+    function handleWheel(e: WheelEvent) {
+      e.preventDefault();
+    }
 
-    // 8. Animation Loop
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+    renderer.domElement.addEventListener("pointerup", handlePointerUp);
+    renderer.domElement.addEventListener("wheel", handleWheel, { passive: false });
+
+    // 9. Animation Loop
     let animId: number;
+    let clock = 0;
     function animate() {
       animId = requestAnimationFrame(animate);
+      clock += 0.015;
       starField.rotation.y += 0.0003;
+
+      // Animate flowing photons along 3D traversal lasers
+      photonsRef.current.forEach((ph) => {
+        const t = ((clock * 0.75 + ph.offset) % 1);
+        ph.mesh.position.lerpVectors(ph.p1, ph.p2, t);
+      });
+
+      // Animate spinning candidate rings
+      if (candidateRingsGroupRef.current) {
+        candidateRingsGroupRef.current.children.forEach((child) => {
+          child.rotation.z += 0.025;
+          const s = 1 + Math.sin(clock * 4) * 0.08;
+          child.scale.set(s, s, s);
+        });
+      }
+
       controls.update();
       renderer.render(scene, camera);
     }
@@ -315,7 +364,9 @@ export default function ReasoningGraph3D({
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", handleResize);
-      renderer.domElement.removeEventListener("click", handleClick);
+      renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
+      renderer.domElement.removeEventListener("pointerup", handlePointerUp);
+      renderer.domElement.removeEventListener("wheel", handleWheel);
       controls.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
@@ -324,8 +375,9 @@ export default function ReasoningGraph3D({
     };
   }, [graphData.nodes, graphData.edges, height]);
 
-  // Update node colors & properties smoothly in-place without rebuilding scene
+  // Update node visual properties, 3D Traversal Lasers, and Candidate Rings smoothly in-place
   useEffect(() => {
+    // 1. Update node meshes
     nodeMeshesRef.current.forEach(({ mesh }, id) => {
       const isSup = supportingIndices.has(id);
       const isTrav = traversedSet.has(id);
@@ -336,29 +388,33 @@ export default function ReasoningGraph3D({
       let color = 0x00f0ff;
       let emissive = 0x004455;
       let scale = 1.0;
-      let opacity = 1.0;
+      let opacity = 0.9;
 
       if (isSup) {
         color = 0x10b981; // emerald
         emissive = 0x047857;
-        scale = 1.35;
+        scale = 1.45;
+        opacity = 1.0;
       } else if (isTrav) {
         color = 0xa855f7; // violet
         emissive = 0x6b21a8;
-        scale = 1.15;
+        scale = 1.25;
+        opacity = 1.0;
       } else if (isKept) {
         color = 0x34d399; // bright emerald
         emissive = 0x059669;
-        scale = 1.15;
+        scale = 1.2;
+        opacity = 1.0;
       } else if (isPrune) {
         color = 0xf43f5e; // ruby
-        emissive = 0x881337;
-        scale = 0.8;
-        opacity = 0.4;
+        emissive = 0x440000;
+        scale = 0.75;
+        opacity = 0.25;
       } else if (isCand) {
-        color = 0x38bdf8;
+        color = 0x00f0ff; // electric cyan
         emissive = 0x0284c7;
-        scale = 1.1;
+        scale = 1.2;
+        opacity = 1.0;
       }
 
       if (mesh.material instanceof THREE.MeshStandardMaterial) {
@@ -370,7 +426,111 @@ export default function ReasoningGraph3D({
       }
       mesh.scale.set(scale, scale, scale);
     });
-  }, [traversedSet, prunedSet, supportingIndices, keptSet, activeCandidateSet]);
+
+    // 2. Build 3D Traversal Lasers & Photons
+    const traversalGroup = traversalGroupRef.current;
+    const nodePositions = nodePositionsRef.current;
+    if (traversalGroup && nodePositions.size > 0) {
+      while (traversalGroup.children.length > 0) {
+        const obj = traversalGroup.children[0];
+        traversalGroup.remove(obj);
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry?.dispose();
+          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+          else obj.material?.dispose();
+        }
+      }
+      photonsRef.current = [];
+
+      // Collect traversal edges
+      const activeTraversalEdges: Array<{ source: number; target: number }> = [];
+      if (playbackFrame?.traversalEdges && playbackFrame.traversalEdges.length > 0) {
+        activeTraversalEdges.push(...playbackFrame.traversalEdges);
+      } else if (traversedSet.size >= 2) {
+        const arr = Array.from(traversedSet);
+        for (let i = 0; i < arr.length - 1; i++) {
+          activeTraversalEdges.push({ source: arr[i], target: arr[i + 1] });
+        }
+      }
+
+      activeTraversalEdges.forEach((edge) => {
+        const p1 = nodePositions.get(edge.source);
+        const p2 = nodePositions.get(edge.target);
+        if (!p1 || !p2) return;
+
+        const dir = new THREE.Vector3().subVectors(p2, p1);
+        const len = dir.length();
+        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+
+        // High-energy glowing neon cylinder
+        const cylGeo = new THREE.CylinderGeometry(0.22, 0.22, len, 16);
+        const cylMat = new THREE.MeshStandardMaterial({
+          color: 0xc084fc,
+          emissive: 0xa855f7,
+          emissiveIntensity: 2.8,
+          roughness: 0.1,
+          metalness: 0.8,
+        });
+        const cylMesh = new THREE.Mesh(cylGeo, cylMat);
+        cylMesh.position.copy(mid);
+        cylMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        traversalGroup.add(cylMesh);
+
+        // Outer translucent laser aura cylinder
+        const auraGeo = new THREE.CylinderGeometry(0.55, 0.55, len, 16);
+        const auraMat = new THREE.MeshBasicMaterial({
+          color: 0xa855f7,
+          transparent: true,
+          opacity: 0.25,
+        });
+        const auraMesh = new THREE.Mesh(auraGeo, auraMat);
+        auraMesh.position.copy(mid);
+        auraMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        traversalGroup.add(auraMesh);
+
+        // Flowing glowing photon spheres
+        for (let k = 0; k < 2; k++) {
+          const phGeo = new THREE.SphereGeometry(0.4, 16, 16);
+          const phMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          const phMesh = new THREE.Mesh(phGeo, phMat);
+          phMesh.position.copy(p1);
+          traversalGroup.add(phMesh);
+          photonsRef.current.push({ p1, p2, mesh: phMesh, offset: k * 0.5 });
+        }
+      });
+    }
+
+    // 3. Build Candidate Orbit Torus Rings
+    const candidateGroup = candidateRingsGroupRef.current;
+    if (candidateGroup && nodePositions.size > 0) {
+      while (candidateGroup.children.length > 0) {
+        const obj = candidateGroup.children[0];
+        candidateGroup.remove(obj);
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry?.dispose();
+          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+          else obj.material?.dispose();
+        }
+      }
+
+      activeCandidateSet.forEach((candId) => {
+        const pos = nodePositions.get(candId);
+        if (!pos) return;
+
+        const ringGeo = new THREE.TorusGeometry(2.3, 0.08, 12, 32);
+        const ringMat = new THREE.MeshStandardMaterial({
+          color: 0x00f0ff,
+          emissive: 0x00f0ff,
+          emissiveIntensity: 2.5,
+          roughness: 0.2,
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.position.copy(pos);
+        ringMesh.rotation.x = Math.PI / 2;
+        candidateGroup.add(ringMesh);
+      });
+    }
+  }, [traversedSet, prunedSet, supportingIndices, keptSet, activeCandidateSet, playbackFrame]);
 
   if (webglError) {
     return (

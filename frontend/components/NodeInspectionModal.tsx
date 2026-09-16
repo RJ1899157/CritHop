@@ -46,7 +46,10 @@ export default function NodeInspectionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={onClose}
+    >
       <div
         className="relative w-full max-w-2xl rounded-3xl border border-cyan-500/30 bg-[#0a0d14]/95 p-6 shadow-2xl shadow-cyan-500/10 backdrop-blur-xl sm:p-8"
         onClick={(e) => e.stopPropagation()}

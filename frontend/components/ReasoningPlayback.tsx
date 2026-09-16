@@ -198,7 +198,7 @@ export default function ReasoningPlayback({
   const [speed, setSpeed] = useState<number>(1);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const onFrameChangeRef = useRef(onFrameChange);
-  const lastNotifiedIndex = useRef<number>(-1);
+  const lastNotifiedKey = useRef<string>("");
 
   // Keep callback ref updated
   useEffect(() => {
@@ -207,13 +207,15 @@ export default function ReasoningPlayback({
 
   const currentFrame = frames[currentIdx] || frames[0];
 
-  // Notify parent only when currentIdx or currentFrame stepIndex actually changes
+  // Notify parent safely without causing re-render feedback loops
   useEffect(() => {
-    if (currentFrame && lastNotifiedIndex.current !== currentIdx) {
-      lastNotifiedIndex.current = currentIdx;
+    if (!currentFrame) return;
+    const key = `${currentIdx}_${currentFrame.stepIndex}_${frames.length}_${currentFrame.phase}`;
+    if (lastNotifiedKey.current !== key) {
+      lastNotifiedKey.current = key;
       onFrameChangeRef.current?.(currentFrame);
     }
-  }, [currentIdx, currentFrame]);
+  }, [currentIdx, currentFrame, frames.length]);
 
   useEffect(() => {
     if (!isPlaying) {
