@@ -1,0 +1,11 @@
+Incident Brief (IR-2024-091): On November 12, security operations detected an unauthorized AWS IAM API call generating presigned URLs for private storage assets. Preliminary triage traced the origin to release pipeline deployment artifact v4.2, which ingested an updated third-party package dependency `@auth-tools/jwt-verify`.
+
+Forensic Analysis of `@auth-tools/jwt-verify`: Static and dynamic reverse-engineering of the compromised `@auth-tools/jwt-verify` npm package (v2.1.4) identified an obfuscated post-install payload. Upon execution in the CI/CD environment, the payload scrapes container environment variables, specifically harvesting ephemeral AWS STS role credentials, and transmits them via encrypted DNS tunneling to command-and-control (C2) IP address 198.51.100.44.
+
+Threat Intelligence Feed (CISA / Mandiant Advisory): Threat Intelligence Report TI-884 attributes the IPv4 infrastructure 198.51.100.44 and associated dynamic DNS hostnames to the advanced persistent threat actor known as "Cobalt Viper" (also tracked as UNC-3921). Cobalt Viper specializes in financial sector supply-chain compromise and cloud credential harvesting for secondary extortion.
+
+AWS CloudTrail Log Telemetry: CloudTrail event record `ev-994812a` shows that on November 12 at 03:14 UTC, the exfiltrated IAM role `arn:aws:iam::123456789012:role/ProdDataSync` authenticated from an anomalous external ASN. Within two minutes, this role executed the `s3:CreatePresignedUrl` API call on bucket `fintech-core-vault-us-east`, generating a 7-day download link for encrypted customer ledger backups.
+
+DevOps Maintenance Log (Distractor): On November 11, the platform engineering team performed scheduled zero-downtime maintenance on the production Apache Kafka message bus clusters in us-west-2, upgrading brokers from version 3.4 to 3.5 without service interruption.
+
+CloudWatch Billing Alert (Distractor): On November 10, CloudWatch billing alarms emitted a medium-priority notification indicating that DynamoDB write capacity unit consumption on the `user-sessions` table exceeded 80% of the provisioned billing threshold.
