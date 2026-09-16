@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import type { GraphData, GraphNode } from "@/lib/api";
+import type { PlaybackFrame } from "./ReasoningPlayback";
 
 type SimNode = GraphNode & {
   x: number;
@@ -14,6 +15,8 @@ type SimNode = GraphNode & {
   isSupporting: boolean;
   isTraversed: boolean;
   isPruned: boolean;
+  isKept: boolean;
+  isCandidate: boolean;
   hopNumber: number | null;
 };
 
@@ -21,6 +24,7 @@ type ReasoningGraph2DProps = {
   graphData: GraphData;
   hopTrace?: Array<Record<string, unknown>>;
   supportingPassages?: string[];
+  playbackFrame?: PlaybackFrame;
   onSelectNode?: (node: GraphNode) => void;
   activeHop?: number | null;
   height?: number;
@@ -30,6 +34,7 @@ export default function ReasoningGraph2D({
   graphData,
   hopTrace = [],
   supportingPassages = [],
+  playbackFrame,
   onSelectNode,
   activeHop,
   height = 520,
@@ -47,7 +52,18 @@ export default function ReasoningGraph2D({
   const [pulseTime, setPulseTime] = useState(0);
 
   // Pre-calculate node classifications
-  const { traversedSet, prunedSet, hopMap, supportingIndices } = useMemo(() => {
+  const { traversedSet, prunedSet, hopMap, supportingIndices, keptSet, activeCandidateSet } = useMemo(() => {
+    if (playbackFrame) {
+      return {
+        traversedSet: new Set<number>(playbackFrame.traversedNodeIds),
+        prunedSet: new Set<number>(playbackFrame.prunedNodeIds),
+        hopMap: new Map<number, number>(),
+        supportingIndices: new Set<number>(playbackFrame.supportingNodeIds),
+        keptSet: new Set<number>(playbackFrame.keptNodeIds),
+        activeCandidateSet: new Set<number>(playbackFrame.activeCandidateIds),
+      };
+    }
+
     const traversed = new Set<number>();
     const pruned = new Set<number>();
     const hopM = new Map<number, number>();
@@ -81,8 +97,15 @@ export default function ReasoningGraph2D({
       }
     });
 
-    return { traversedSet: traversed, prunedSet: pruned, hopMap: hopM, supportingIndices: supIndices };
-  }, [hopTrace, supportingPassages, graphData.nodes]);
+    return {
+      traversedSet: traversed,
+      prunedSet: pruned,
+      hopMap: hopM,
+      supportingIndices: supIndices,
+      keptSet: new Set<number>(),
+      activeCandidateSet: new Set<number>(),
+    };
+  }, [hopTrace, supportingPassages, graphData.nodes, playbackFrame]);
 
   // Build simulation nodes
   useEffect(() => {
@@ -102,24 +125,34 @@ export default function ReasoningGraph2D({
       const isSup = supportingIndices.has(n.id);
       const isTrav = traversedSet.has(n.id);
       const isPrune = prunedSet.has(n.id);
+      const isKept = keptSet.has(n.id);
+      const isCand = activeCandidateSet.has(n.id);
       const hopNum = hopMap.get(n.id) ?? null;
 
-      let color = "#00f0ff"; // default cyan candidate
-      let glowColor = "rgba(0, 240, 255, 0.4)";
-      let nodeRadius = 18;
+      let color = "#64748b"; // neutral slate
+      let glowColor = "rgba(100, 116, 139, 0.3)";
+      let nodeRadius = 17;
 
       if (isSup) {
         color = "#10b981"; // emerald
-        glowColor = "rgba(16, 185, 129, 0.7)";
+        glowColor = "rgba(16, 185, 129, 0.8)";
         nodeRadius = 24;
       } else if (isTrav) {
         color = "#a855f7"; // violet
-        glowColor = "rgba(168, 85, 247, 0.6)";
+        glowColor = "rgba(168, 85, 247, 0.7)";
         nodeRadius = 21;
+      } else if (isKept) {
+        color = "#34d399"; // bright emerald
+        glowColor = "rgba(52, 211, 153, 0.7)";
+        nodeRadius = 20;
       } else if (isPrune) {
         color = "#f43f5e"; // ruby
         glowColor = "rgba(244, 63, 94, 0.3)";
-        nodeRadius = 15;
+        nodeRadius = 14;
+      } else if (isCand || !playbackFrame) {
+        color = "#00f0ff"; // cyan candidate
+        glowColor = "rgba(0, 240, 255, 0.5)";
+        nodeRadius = 18;
       }
 
       return {
@@ -134,6 +167,8 @@ export default function ReasoningGraph2D({
         isSupporting: isSup,
         isTraversed: isTrav,
         isPruned: isPrune,
+        isKept,
+        isCandidate: isCand,
         hopNumber: hopNum,
       };
     });

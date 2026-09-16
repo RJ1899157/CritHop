@@ -6,7 +6,7 @@ import Link from "next/link";
 import QueryBox from "@/components/QueryBox";
 import AnswerCard from "@/components/AnswerCard";
 import CritiquePanel from "@/components/CritiquePanel";
-import HopTrace from "@/components/HopTrace";
+import BasicHopSummary from "@/components/BasicHopSummary";
 import { useQueryResult } from "@/context/ResultContext";
 import type { QueryResult } from "@/lib/api";
 
@@ -147,13 +147,7 @@ export default function HomePage() {
                 answer={result.answer}
                 supportingPassages={result.supporting_passages ?? []}
               />
-              <HopTrace
-                hopTrace={result.hop_trace ?? []}
-                graphData={result.graph}
-                supportingPassages={result.supporting_passages ?? []}
-                critiqueLog={result.critique_log}
-                retrievalRetry={result.retrieval_retry}
-              />
+              <BasicHopSummary result={result} />
             </div>
             <div>
               <CritiquePanel

@@ -172,27 +172,28 @@ export default function ResultsPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
-        <div className="space-y-6">
-          <AnswerCard
-            answer={result.answer}
-            supportingPassages={result.supporting_passages ?? []}
-          />
-          <HopTrace
-            hopTrace={result.hop_trace ?? []}
-            graphData={result.graph}
-            supportingPassages={result.supporting_passages ?? []}
-            critiqueLog={result.critique_log}
-            retrievalRetry={result.retrieval_retry}
-          />
-        </div>
-        <div>
-          <CritiquePanel
-            isrelDecisions={result.critique_log?.isrel_decisions ?? []}
-            issupDecisions={result.critique_log?.issup_decisions ?? []}
-            isuseDecision={result.critique_log?.isuse_decision ?? false}
-          />
-        </div>
+      {/* Top row: Grounded Answer & Self-RAG Critique */}
+      <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr] mb-8">
+        <AnswerCard
+          answer={result.answer}
+          supportingPassages={result.supporting_passages ?? []}
+        />
+        <CritiquePanel
+          isrelDecisions={result.critique_log?.isrel_decisions ?? []}
+          issupDecisions={result.critique_log?.issup_decisions ?? []}
+          isuseDecision={result.critique_log?.isuse_decision ?? false}
+        />
+      </div>
+
+      {/* Full-width Reasoning Universe Studio: Playback, 2D Graph, 3D Nebula, Steps & Telemetry */}
+      <div className="w-full">
+        <HopTrace
+          hopTrace={result.hop_trace ?? []}
+          graphData={result.graph}
+          supportingPassages={result.supporting_passages ?? []}
+          critiqueLog={result.critique_log}
+          retrievalRetry={result.retrieval_retry}
+        />
       </div>
     </main>
   );

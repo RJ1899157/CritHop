@@ -4,11 +4,13 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { GraphData, GraphNode } from "@/lib/api";
+import type { PlaybackFrame } from "./ReasoningPlayback";
 
 type ReasoningGraph3DProps = {
   graphData: GraphData;
   hopTrace?: Array<Record<string, unknown>>;
   supportingPassages?: string[];
+  playbackFrame?: PlaybackFrame;
   onSelectNode?: (node: GraphNode) => void;
   height?: number;
 };
@@ -17,6 +19,7 @@ export default function ReasoningGraph3D({
   graphData,
   hopTrace = [],
   supportingPassages = [],
+  playbackFrame,
   onSelectNode,
   height = 540,
 }: ReasoningGraph3DProps) {
@@ -25,7 +28,17 @@ export default function ReasoningGraph3D({
   const [selectedNodeTitle, setSelectedNodeTitle] = useState<string | null>(null);
 
   // Classify nodes
-  const { traversedSet, prunedSet, hopMap, supportingIndices } = useMemo(() => {
+  const { traversedSet, prunedSet, hopMap, supportingIndices, keptSet } = useMemo(() => {
+    if (playbackFrame) {
+      return {
+        traversedSet: new Set<number>(playbackFrame.traversedNodeIds),
+        prunedSet: new Set<number>(playbackFrame.prunedNodeIds),
+        hopMap: new Map<number, number>(),
+        supportingIndices: new Set<number>(playbackFrame.supportingNodeIds),
+        keptSet: new Set<number>(playbackFrame.keptNodeIds),
+      };
+    }
+
     const traversed = new Set<number>();
     const pruned = new Set<number>();
     const hopM = new Map<number, number>();
@@ -56,8 +69,14 @@ export default function ReasoningGraph3D({
       if (matchesSupporting) supIndices.add(n.id);
     });
 
-    return { traversedSet: traversed, prunedSet: pruned, hopMap: hopM, supportingIndices: supIndices };
-  }, [hopTrace, supportingPassages, graphData.nodes]);
+    return {
+      traversedSet: traversed,
+      prunedSet: pruned,
+      hopMap: hopM,
+      supportingIndices: supIndices,
+      keptSet: new Set<number>(),
+    };
+  }, [hopTrace, supportingPassages, graphData.nodes, playbackFrame]);
 
   useEffect(() => {
     const container = containerRef.current;
