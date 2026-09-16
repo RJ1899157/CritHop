@@ -30,6 +30,13 @@ def _first_value(example: dict[str, Any], keys: tuple[str, ...]) -> Any:
 
 
 def _flatten_context(context: Any) -> list[str]:
+    if isinstance(context, str):
+        try:
+            parsed = json.loads(context)
+            if isinstance(parsed, (list, dict)):
+                context = parsed
+        except Exception:
+            pass
     if isinstance(context, dict):
         titles = context.get("title", [])
         sentences = context.get("sentences", context.get("text", []))
@@ -50,7 +57,12 @@ def _flatten_context(context: Any) -> list[str]:
                 text = item.get("paragraph_text", item.get("text", item.get("paragraph", "")))
                 passages.append(f"{title}: {text}".strip(": "))
             elif isinstance(item, list):
-                passages.append(" ".join(map(str, item)))
+                if len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], list):
+                    title = item[0]
+                    body = " ".join(map(str, item[1]))
+                    passages.append(f"{title}: {body}".strip(": "))
+                else:
+                    passages.append(" ".join(map(str, item)))
             else:
                 passages.append(str(item))
         return passages
@@ -69,15 +81,40 @@ def _normalize_example(example: dict[str, Any]) -> tuple[str, str, list[str]]:
 def _normalize_with_labels(example: dict[str, Any]):
     question, answer, passages = _normalize_example(example)
     context = example.get("context", example.get("paragraphs", example.get("documents", [])))
+    if isinstance(context, str):
+        try:
+            parsed = json.loads(context)
+            if isinstance(parsed, (list, dict)):
+                context = parsed
+        except Exception:
+            pass
+
+    supporting_facts = example.get("supporting_facts", [])
+    if isinstance(supporting_facts, str):
+        try:
+            parsed = json.loads(supporting_facts)
+            if isinstance(parsed, (list, dict)):
+                supporting_facts = parsed
+        except Exception:
+            pass
+
     if isinstance(context, dict):
-        supporting_titles = set(example.get("supporting_facts", {}).get("title", []))
+        supporting_titles = set(supporting_facts.get("title", [])) if isinstance(supporting_facts, dict) else set()
         labels = [int(title in supporting_titles) for title in context.get("title", [])]
     elif isinstance(context, list):
-        labels = [
-            int(bool(item.get("is_supporting", item.get("supporting", item.get("label", False)))))
-            if isinstance(item, dict) else 0
-            for item in context
-        ]
+        if isinstance(supporting_facts, list):
+            supporting_titles = {fact[0] for fact in supporting_facts if isinstance(fact, list) and fact}
+        else:
+            supporting_titles = set()
+
+        labels = []
+        for item in context:
+            if isinstance(item, dict):
+                labels.append(int(bool(item.get("is_supporting", item.get("supporting", item.get("label", False))))))
+            elif isinstance(item, list) and item and isinstance(item[0], str):
+                labels.append(int(item[0] in supporting_titles))
+            else:
+                labels.append(0)
     else:
         labels = [0] * len(passages)
     labels = (labels + [0] * len(passages))[:len(passages)]

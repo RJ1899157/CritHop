@@ -26,6 +26,13 @@ export default function HomePage() {
     } catch {
       // ignore
     }
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlQ = params.get("question");
+      const urlDs = params.get("dataset");
+      if (urlQ) setSelectedQ(urlQ);
+      if (urlDs) setSelectedDs(urlDs);
+    }
   }, []);
 
   function handleResult(newResult: QueryResult) {

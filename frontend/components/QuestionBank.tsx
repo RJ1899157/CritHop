@@ -25,6 +25,11 @@ const DATASET_LABELS: Record<string, { name: string; tag: string; desc: string }
     tag: "Structured Evidence",
     desc: "Entity-relation multi-hop reasoning requiring explicit cross-passage entity and temporal bridges.",
   },
+  custom: {
+    name: "Enterprise & BYOC",
+    tag: "Real-World Scenarios",
+    desc: "Real-world multi-hop investigations across legal contracts, biomedical clinical trials, and cloud SRE incidents.",
+  },
 };
 
 export default function QuestionBank({ onSelectQuestion, selectedDataset }: QuestionBankProps) {
@@ -44,6 +49,14 @@ export default function QuestionBank({ onSelectQuestion, selectedDataset }: Ques
       }
     }
     void load();
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const ds = params.get("dataset");
+      if (ds) {
+        setActiveDataset(ds);
+      }
+    }
   }, []);
 
   useEffect(() => {

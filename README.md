@@ -121,10 +121,32 @@ Inspect the mathematical health of the retrieval and generation pipeline:
 <br/>
 
 ### 5. Curated Multi-Hop Question Bank
-Browse **17 curated multi-hop questions** across HotpotQA, MuSiQue, and 2WikiMultiHopQA with 1-click execution into the query runner. Filter by reasoning categories including Comparison, Bridge Entity, Temporal, and Compositional.
+Browse **curated multi-hop benchmark questions** across HotpotQA, MuSiQue, and 2WikiMultiHopQA with 1-click execution into the query runner. Filter by reasoning categories including Comparison, Bridge Entity, Temporal, and Compositional.
 
 <p align="center">
-  <img src="docs/screenshots/06_question_bank.png" alt="Question Bank — 17 Curated Benchmark Questions" width="100%" />
+  <img src="docs/screenshots/06_question_bank.png" alt="Question Bank — Curated Benchmark Questions" width="100%" />
+</p>
+
+<br/>
+
+### 6. Personal Domain & Docs Studio (BYOC)
+Explore multi-hop knowledge graph reasoning over your own personal documents, contracts, clinical protocols, or system architecture incident logs. Features:
+- **Curated Enterprise Presets**: 1-click exploration of Legal M&A Liability (7 clauses), Biomedical Clinical Trials (6 protocols), and Cloud SRE Incident Root Cause (7 logs).
+- **Bring Your Own Document**: Paste custom text or upload `.txt`, `.md`, or `.json` files.
+- **Smart Semantic Chunker**: Automatically splits unstructured text into connected passages for graph building.
+- **Collapsible Evidence Drawer**: Inspect, prune, or search through active evidence nodes with zero visual clutter.
+
+<p align="center">
+  <img src="docs/screenshots/08_custom_domain_studio.png" alt="Personal Domain & Docs Studio (BYOC)" width="100%" />
+</p>
+
+<br/>
+
+### 7. Enterprise & BYOC Question Bank
+Discover multi-hop investigations across real-world domains with explicit multi-step reasoning traces and ground truth answer keys.
+
+<p align="center">
+  <img src="docs/screenshots/09_custom_questions_showcase.png" alt="Enterprise & BYOC Question Bank" width="100%" />
 </p>
 
 <br/>
@@ -136,12 +158,12 @@ Browse **17 curated multi-hop questions** across HotpotQA, MuSiQue, and 2WikiMul
 ## 🏗️ System Architecture
 
 ```text
-                          User Question + Dataset
+              User Question + Dataset OR Custom Document (BYOC)
                                      │
                                      ▼
                      ┌───────────────────────────────┐
-                     │  Dynamic Split Context Loader │
-                     │  HotpotQA / MuSiQue / 2Wiki   │
+                     │ Context Loader / BYOC Chunker │
+                     │ Benchmark Split / Custom Text │
                      └───────────────┬───────────────┘
                                      ▼
                      ┌───────────────────────────────┐

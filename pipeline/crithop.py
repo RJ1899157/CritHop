@@ -184,6 +184,7 @@ class CritHop:
                 "answer": generation_result["answer"],
                 "hop_trace": self.traverser.hop_log,
                 "graph": serializable_graph,
+                "graph_data": serializable_graph,
                 "critique_log": {
                     "isrel_decisions": isrel_decisions,
                     "issup_decisions": generation_result["issup_scores"],
@@ -309,6 +310,7 @@ class CritHop:
                 "answer": generation_result["answer"],
                 "hop_trace": self.traverser.hop_log,
                 "graph": serializable_graph,
+                "graph_data": serializable_graph,
                 "critique_log": {
                     "isrel_decisions": isrel_decisions,
                     "issup_decisions": generation_result["issup_scores"],

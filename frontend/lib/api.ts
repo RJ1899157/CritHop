@@ -98,13 +98,40 @@ export type StreamEvent = {
   result?: QueryResult;
 };
 
+export type DomainPreset = {
+  id: string;
+  domain: string;
+  title: string;
+  icon: string;
+  description: string;
+  question: string;
+  passages: string[];
+};
+
+export function fetchDomainPresets(): Promise<Record<string, DomainPreset>> {
+  return request<Record<string, DomainPreset>>("/domain-presets");
+}
+
+export async function chunkRawText(text: string): Promise<string[]> {
+  const res = await request<{ passages: string[]; count: number }>("/chunk-text", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+  return res.passages || [];
+}
+
 export function queryCritHop(
   question: string,
   dataset: string,
+  customPassages?: string[],
 ): Promise<QueryResult> {
   return request<QueryResult>("/query", {
     method: "POST",
-    body: JSON.stringify({ question, dataset }),
+    body: JSON.stringify({
+      question,
+      dataset,
+      custom_passages: customPassages && customPassages.length > 0 ? customPassages : undefined,
+    }),
   });
 }
 
@@ -112,6 +139,7 @@ export async function queryCritHopStream(
   question: string,
   dataset: string,
   onEvent: (event: StreamEvent) => void,
+  customPassages?: string[],
 ): Promise<QueryResult> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(`${baseUrl}/query/stream`, {
@@ -119,7 +147,11 @@ export async function queryCritHopStream(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ question, dataset }),
+    body: JSON.stringify({
+      question,
+      dataset,
+      custom_passages: customPassages && customPassages.length > 0 ? customPassages : undefined,
+    }),
   });
 
   if (!response.ok) {
