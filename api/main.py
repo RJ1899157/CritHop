@@ -58,7 +58,7 @@ def _get_dataset_records(dataset: str) -> list[dict]:
                             records.append(json.loads(line))
             else:
                 loaded = json.loads(path.read_text(encoding="utf-8"))
-                recs = loaded if isinstance(loaded, list) else loaded.get("data", loaded.get("records", []))
+                recs = loaded if isinstance(loaded, list) else ((loaded.get("data") if loaded.get("data") is not None else loaded.get("records")) or [])
                 records.extend(recs)
         except Exception:
             continue
@@ -159,7 +159,17 @@ async def lifespan(app: FastAPI):
         if getattr(app.state.crithop, "reranker", None):
             app.state.crithop.reranker._scores("warmup", ["warmup passage"], batch_size=1)
         for ds in ("hotpotqa", "musique", "2wikimultihopqa"):
-            _get_dataset_records(ds)
+            recs = _get_dataset_records(ds)
+            # Pre-index exact questions from records for fast O(1) lookup
+            if ds not in _EXACT_QUESTION_CACHE:
+                _EXACT_QUESTION_CACHE[ds] = {}
+            for r in recs:
+                q = str(r.get("question", r.get("query", ""))).strip().casefold()
+                if q and q not in _EXACT_QUESTION_CACHE[ds]:
+                    try:
+                        _EXACT_QUESTION_CACHE[ds][q] = _normalize_example(r)
+                    except Exception:
+                        pass
     except Exception:
         pass
     yield
@@ -406,12 +416,17 @@ def run_evaluation() -> EvaluationRunResponse:
 
 
 @app.get("/health")
-def health() -> dict:
+def health(request: Request) -> dict:
     """Return service and model status."""
-    with open(CONFIG_PATH, "r", encoding="utf-8") as file:
-        config = yaml.safe_load(file) or {}
+    crithop = getattr(request.app.state, "crithop", None)
+    if crithop and hasattr(crithop, "config"):
+        model = crithop.config.get("model", "openai/gpt-oss-120b")
+    else:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as file:
+            config = yaml.safe_load(file) or {}
+        model = config.get("model", "openai/gpt-oss-120b")
     return {
         "status": "ok",
-        "model": config.get("model"),
+        "model": model,
         "reranker_active": os.getenv("USE_RERANKER", "false").lower() == "true",
     }

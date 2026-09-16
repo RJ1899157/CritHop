@@ -24,9 +24,13 @@ class PassageGraph:
             config.get("embedding_device", "cpu"),
         )
         self.graph: dict[str, Any] = {"nodes": {}, "adjacency": {}}
+        self._built = False
 
     def build(self) -> dict:
         """Create graph nodes and connect pairs above the similarity threshold."""
+        if self._built:
+            return self.graph
+        self._built = True
         if not self.passages:
             self.graph = {"nodes": {}, "adjacency": {}}
             return self.graph

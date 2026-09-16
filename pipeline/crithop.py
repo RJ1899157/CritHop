@@ -44,7 +44,7 @@ class CritHop:
                 os.getenv("HIRO_BASE_URL"),
                 self.model,
                 request_interval=float(
-                    os.getenv("HIRO_REQUEST_INTERVAL", "0")
+                    os.getenv("HIRO_REQUEST_INTERVAL") or "0"
                 ),
             )
             if provider == "hiro"
@@ -104,22 +104,13 @@ class CritHop:
             print(f"HybridRetriever returned {len(initial_results)} passages")
             start_passages = [index for index, _ in initial_results]
 
-            import inspect
-
-            traverser_kwargs = {
-                "graph": self.graph,
-                "config": self.config,
-                "groq_client": self.groq_client,
-                "isrel": self.isrel,
-            }
-            try:
-                sig = inspect.signature(HopTraverser.__init__)
-                if "reranker" in sig.parameters:
-                    traverser_kwargs["reranker"] = self.reranker
-            except Exception:
-                pass
-
-            self.traverser = HopTraverser(**traverser_kwargs)
+            self.traverser = HopTraverser(
+                graph=self.graph,
+                config=self.config,
+                groq_client=self.groq_client,
+                isrel=self.isrel,
+                reranker=self.reranker,
+            )
             traversed_passages = self.traverser.traverse(
                 question,
                 start_passages,

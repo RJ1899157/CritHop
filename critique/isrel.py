@@ -60,13 +60,17 @@ class IsRel:
         reasoning_step: str,
         passages: list[str],
     ) -> list[bool]:
-        """Critique candidate passages in a single batched prompt."""
+        """Critique candidate passages in a single compact batched prompt."""
         if not passages:
             return []
         if len(passages) == 1:
             return [self.critique(question, reasoning_step, passages[0])]
 
-        formatted = "\n\n".join(f"Passage [{i}]: {p}" for i, p in enumerate(passages))
+        # Keep passages concise to stay well within token-per-minute quota
+        formatted = "\n\n".join(
+            f"Passage [{i}]: {p[:300].strip()}..." if len(p) > 300 else f"Passage [{i}]: {p.strip()}"
+            for i, p in enumerate(passages)
+        )
         prompt = (
             f"Question: {question}\n"
             f"Current reasoning step: {reasoning_step}\n\n"

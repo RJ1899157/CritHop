@@ -56,10 +56,8 @@ const SAMPLE_RESULT: QueryResult = {
 
 export default function ResultsPage() {
   const { result, setResult } = useQueryResult();
-  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
-    setHasMounted(true);
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("sample") === "true") {
@@ -72,31 +70,23 @@ export default function ResultsPage() {
     setResult(SAMPLE_RESULT);
   }
 
-  if (!hasMounted) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-6">
-        <div className="flex items-center gap-3 text-sm text-slate-400">
-          <svg className="h-5 w-5 animate-spin text-emerald-400" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-          Loading result...
-        </div>
-      </main>
-    );
-  }
+  const QUICK_QUESTIONS = [
+    { q: "Were Scott Derrickson and Ed Wood of the same nationality?", ds: "hotpotqa" },
+    { q: "Who is the spouse of the Green performer?", ds: "musique" },
+    { q: "Who is the mother of the director of film Polish-Russian War (Film)?", ds: "2wikimultihopqa" },
+  ];
 
   if (!result) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur">
+      <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="w-full rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-slate-400">
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <h2 className="mt-4 text-lg font-semibold text-white">No active query in session</h2>
-          <p className="mt-2 max-w-sm text-sm text-slate-400">
+          <p className="mt-2 max-w-sm mx-auto text-sm text-slate-400">
             Submit a multi-hop question on the query page, or load a pre-computed sample result to inspect the reasoning path and critique signals.
           </p>
           <div className="mt-6 flex items-center justify-center gap-3">
@@ -112,6 +102,24 @@ export default function ResultsPage() {
             >
               Run a Query
             </Link>
+          </div>
+
+          <div className="mt-8 border-t border-white/10 pt-6 text-left">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+              Or run a benchmark question directly:
+            </p>
+            <div className="space-y-2">
+              {QUICK_QUESTIONS.map((item, idx) => (
+                <Link
+                  key={idx}
+                  href={`/?question=${encodeURIComponent(item.q)}&dataset=${item.ds}&autoRun=true`}
+                  className="block rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-slate-300 hover:border-emerald-400/30 hover:bg-emerald-400/5 hover:text-emerald-300 transition"
+                >
+                  <span className="font-semibold text-emerald-400 mr-2">[{item.ds}]</span>
+                  &ldquo;{item.q}&rdquo; →
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </main>

@@ -1,19 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import QueryBox from "@/components/QueryBox";
+import AnswerCard from "@/components/AnswerCard";
+import CritiquePanel from "@/components/CritiquePanel";
+import HopTrace from "@/components/HopTrace";
+import { useQueryResult } from "@/context/ResultContext";
 import type { QueryResult } from "@/lib/api";
 
 export default function HomePage() {
-  const router = useRouter();
+  const { setResult: setContextResult } = useQueryResult();
+  const [result, setResult] = useState<QueryResult | null>(null);
   const [selectedQ, setSelectedQ] = useState("");
   const [selectedDs, setSelectedDs] = useState("hotpotqa");
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const queryBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Clear any previous query results so the query page is always fresh
+    // Clear any previous query results so the query page is always fresh on load/refresh
     try {
       localStorage.removeItem("crithop-result");
       sessionStorage.removeItem("crithop-result");
@@ -22,9 +28,23 @@ export default function HomePage() {
     }
   }, []);
 
-  function handleResult(_newResult: QueryResult) {
-    // Smoothly transition to the dedicated Results tab
-    router.push("/results");
+  function handleResult(newResult: QueryResult) {
+    setResult(newResult);
+    setContextResult(newResult);
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  }
+
+  function handleClearResult() {
+    setResult(null);
+    setContextResult(null);
+  }
+
+  function handleAskAnother() {
+    setResult(null);
+    setContextResult(null);
+    queryBoxRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
   return (
@@ -71,7 +91,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
+        <div ref={queryBoxRef} className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
           <QueryBox
             onResult={handleResult}
             initialQuestion={selectedQ}
@@ -79,6 +99,66 @@ export default function HomePage() {
           />
         </div>
       </div>
+
+      {/* Inline Results Display */}
+      {result && (
+        <div ref={resultsRef} className="border-t border-white/10 pt-12">
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Active Query Result
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-400">
+                  {result.retrieval_retry ? "Fallback retrieval used" : "Initial retrieval accepted"}
+                </span>
+              </div>
+              <h2 className="mt-4 max-w-4xl text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                {result.question}
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleClearResult}
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-3.5 py-2 text-xs font-medium text-rose-300 transition hover:bg-rose-400/20 hover:text-rose-200"
+              >
+                Clear Result
+              </button>
+              <button
+                onClick={handleAskAnother}
+                className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 shadow-md shadow-emerald-500/10"
+              >
+                ↑ Ask Another Question
+              </button>
+              <Link
+                href="/results"
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+              >
+                <span>Results Tab ↗</span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
+            <div className="space-y-6">
+              <AnswerCard
+                answer={result.answer}
+                supportingPassages={result.supporting_passages ?? []}
+              />
+              <HopTrace hopTrace={result.hop_trace ?? []} />
+            </div>
+            <div>
+              <CritiquePanel
+                isrelDecisions={result.critique_log?.isrel_decisions ?? []}
+                issupDecisions={result.critique_log?.issup_decisions ?? []}
+                isuseDecision={result.critique_log?.isuse_decision ?? false}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Feature Showcase Grid - Explaining the App's Dedicated Tabs */}
       <div className="border-t border-white/10 pt-12">

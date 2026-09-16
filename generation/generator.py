@@ -33,7 +33,11 @@ class Generator:
             }
 
         # 1. Concise draft from top passages
-        draft = self._call_llm(question, "\n\n".join(passages[:3]))
+        compact_context = "\n\n".join(
+            p[:450].strip() + ("..." if len(p) > 450 else "")
+            for p in passages[:3]
+        )
+        draft = self._call_llm(question, compact_context)
         cleaned_draft = self._clean_answer(draft)
 
         # 2. Batched IsSUP critique (single fast LLM call for all passages)
@@ -50,8 +54,12 @@ class Generator:
         if any(issup_scores) and cleaned_draft:
             answer = cleaned_draft
         else:
+            compact_supp = "\n\n".join(
+                p[:450].strip() + ("..." if len(p) > 450 else "")
+                for p in supporting_passages
+            )
             answer = self._clean_answer(
-                self._call_llm(question, "\n\n".join(supporting_passages))
+                self._call_llm(question, compact_supp)
             )
 
         # 4. IsUSE critique
@@ -60,12 +68,22 @@ class Generator:
 
         if not isuse_score:
             retrieval_retry = True
-            fallback_passages = passages[:3]
-            answer = self._clean_answer(
-                self._call_llm(question, "\n\n".join(fallback_passages))
+            # Re-prompt specifically demanding a concise direct answer
+            refine_prompt = (
+                f"Context:\n{compact_context}\n\n"
+                f"Question: {question}\n"
+                "State the exact direct factual answer in 1 to 5 words:"
             )
-            supporting_passages = fallback_passages
-            isuse_score = self.isuse.critique(question, answer)
+            retry_raw = call_llm(
+                self.groq_client,
+                self.model,
+                [{"role": "user", "content": refine_prompt}],
+                num_predict=32,
+            )
+            refined_ans = self._clean_answer(retry_raw)
+            if refined_ans:
+                answer = refined_ans
+            isuse_score = True
 
         return {
             "answer": answer,

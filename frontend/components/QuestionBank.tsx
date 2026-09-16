@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getQuestionBank, type QuestionBankData, type QuestionBankItem } from "@/lib/api";
 
 type QuestionBankProps = {
@@ -27,6 +28,7 @@ const DATASET_LABELS: Record<string, { name: string; tag: string; desc: string }
 };
 
 export default function QuestionBank({ onSelectQuestion, selectedDataset }: QuestionBankProps) {
+  const router = useRouter();
   const [bank, setBank] = useState<QuestionBankData | null>(null);
   const [activeDataset, setActiveDataset] = useState(selectedDataset || "hotpotqa");
   const [searchFilter, setSearchFilter] = useState("");
@@ -67,7 +69,7 @@ export default function QuestionBank({ onSelectQuestion, selectedDataset }: Ques
     if (onSelectQuestion) {
       onSelectQuestion(item.question, activeDataset);
     } else {
-      window.location.href = `/?question=${encodeURIComponent(item.question)}&dataset=${activeDataset}`;
+      router.push(`/?question=${encodeURIComponent(item.question)}&dataset=${activeDataset}&autoRun=true`);
     }
   }
 

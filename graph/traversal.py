@@ -154,9 +154,8 @@ class HopTraverser:
 
             # Early termination: if sufficient multi-hop evidence gathered
             if hop_number >= 1 and len(set(surviving_indices)) >= 2:
-                if next_node is None or next_node in surviving_indices:
-                    print(f"HopTraverser early termination at hop {hop_number + 1}: sufficient evidence gathered")
-                    break
+                print(f"HopTraverser early termination at hop {hop_number + 1}: sufficient evidence gathered")
+                break
 
         if self.reranker is not None:
             print(
@@ -183,8 +182,10 @@ class HopTraverser:
         relevant_indices: list[int],
     ) -> tuple[str, int | None]:
         passages = "\n".join(
-            f"[{idx}] {self.graph.get_passage(idx)}"
-            for idx in relevant_indices
+            f"[{idx}] {self.graph.get_passage(idx)[:250].strip()}..."
+            if len(self.graph.get_passage(idx)) > 250
+            else f"[{idx}] {self.graph.get_passage(idx).strip()}"
+            for idx in relevant_indices[:3]
         )
         prompt = (
             "Given the question, current reasoning step, and relevant passages, "

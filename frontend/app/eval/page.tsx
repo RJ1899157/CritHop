@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import ComparisonTable from "@/components/ComparisonTable";
@@ -22,25 +22,31 @@ export default function EvalPage() {
     }
   }
 
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     void loadEvaluation();
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, []);
 
   async function handleRunEvaluation() {
     setIsRunning(true);
     setStatus("Initiating evaluation benchmark in background...");
     setError("");
+    if (intervalRef.current) clearInterval(intervalRef.current);
+
     try {
       const response = await runEvaluation();
       setStatus(response.message || "Evaluation started. Polling for updates...");
       
-      // Poll every 5 seconds for updated comparison table
       let attempts = 0;
-      const interval = setInterval(async () => {
+      intervalRef.current = setInterval(async () => {
         attempts += 1;
         await loadEvaluation();
         if (attempts >= 12) {
-          clearInterval(interval);
+          if (intervalRef.current) clearInterval(intervalRef.current);
           setIsRunning(false);
           setStatus("Evaluation run complete or progress synced.");
         }

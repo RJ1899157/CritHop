@@ -70,8 +70,12 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
       const params = new URLSearchParams(window.location.search);
       const urlQ = params.get("question");
       const urlDs = params.get("dataset");
+      const shouldAutoRun = params.get("autoRun") === "true";
       if (urlQ) setQuestion(urlQ);
       if (urlDs) setDataset(urlDs);
+      if (shouldAutoRun && urlQ) {
+        void runQuery(urlQ, urlDs || dataset);
+      }
     }
   }, []);
 
@@ -81,18 +85,17 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
       return;
     }
     const timer = setInterval(() => {
-      setLoadingStageIdx((prev) => (prev + 1) % LOADING_STAGES.length);
+      setLoadingStageIdx((prev) => Math.min(prev + 1, LOADING_STAGES.length - 1));
     }, 1400);
     return () => clearInterval(timer);
   }, [isLoading]);
 
   const samples = SAMPLE_QUESTIONS[dataset] || [];
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function runQuery(targetQuestion: string, targetDataset: string) {
     setError("");
 
-    const normalizedQuestion = question.trim();
+    const normalizedQuestion = targetQuestion.trim();
     if (!normalizedQuestion) {
       setError("Enter a question to continue.");
       return;
@@ -100,7 +103,7 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
 
     setIsLoading(true);
     try {
-      const result = await queryCritHop(normalizedQuestion, dataset);
+      const result = await queryCritHop(normalizedQuestion, targetDataset);
       setResult(result);
       if (onResult) {
         onResult(result);
@@ -116,6 +119,11 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await runQuery(question, dataset);
   }
 
   return (

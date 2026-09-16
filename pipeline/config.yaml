@@ -1,4 +1,4 @@
-model: openai/gpt-oss-120b
+model: qwen/qwen3.8-27b
 embedding_model: BAAI/bge-base-en-v1.5
 # CPU avoids exhausting unified memory on Macs during full evaluation.
 embedding_device: cpu

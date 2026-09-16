@@ -66,7 +66,10 @@ class IsSup:
         if len(passages) == 1:
             return [self.critique(question, passages[0], answer)]
 
-        formatted = "\n\n".join(f"Passage [{i}]: {p}" for i, p in enumerate(passages))
+        formatted = "\n\n".join(
+            f"Passage [{i}]: {p[:350].strip()}..." if len(p) > 350 else f"Passage [{i}]: {p.strip()}"
+            for i, p in enumerate(passages)
+        )
         prompt = (
             f"Question: {question}\n"
             f"Answer: {answer}\n\n"

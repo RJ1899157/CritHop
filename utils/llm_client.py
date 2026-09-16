@@ -23,7 +23,13 @@ def call_llm(
     """
     provider = os.getenv("LLM_PROVIDER", "groq").lower()
     if provider != "local":
-        return call_groq(client, model, messages, use_cache=use_cache)
+        return call_groq(
+            client,
+            model,
+            messages,
+            use_cache=use_cache,
+            max_tokens=num_predict,
+        )
 
     base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     payload = json.dumps({
