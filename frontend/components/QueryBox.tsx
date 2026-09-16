@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { queryCritHop, type QueryResult } from "@/lib/api";
+import { queryCritHopStream, type QueryResult, type StreamEvent } from "@/lib/api";
 import { useQueryResult } from "@/context/ResultContext";
 
 const SAMPLE_QUESTIONS: Record<string, string[]> = {
@@ -29,14 +29,23 @@ const SAMPLE_QUESTIONS: Record<string, string[]> = {
   ],
 };
 
-const LOADING_STAGES = [
-  "Retrieving initial evidence via BM25 + BGE...",
-  "Building semantic passage graph...",
-  "Traversing multi-hop reasoning path...",
-  "Phase 2 SLM IsREL critique & pruning...",
-  "Evaluating support signals (IsSUP)...",
-  "Synthesizing and critiquing grounded answer...",
-];
+type StreamState = {
+  stageMessage: string;
+  graph: { nodes: number; edges: number } | null;
+  retrieval: { count: number } | null;
+  hops: Array<{ hop: number; kept?: number; pruned?: number; reasoning?: string }>;
+  critique: { supporting: number; isuse: boolean } | null;
+  logs: string[];
+};
+
+const INITIAL_STREAM_STATE: StreamState = {
+  stageMessage: "",
+  graph: null,
+  retrieval: null,
+  hops: [],
+  critique: null,
+  logs: [],
+};
 
 type QueryBoxProps = {
   onResult?: (result: QueryResult) => void;
@@ -50,7 +59,7 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
   const [question, setQuestion] = useState(initialQuestion || "");
   const [dataset, setDataset] = useState(initialDataset || "hotpotqa");
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingStageIdx, setLoadingStageIdx] = useState(0);
+  const [streamState, setStreamState] = useState<StreamState>(INITIAL_STREAM_STATE);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -79,18 +88,70 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
     }
   }, []);
 
-  useEffect(() => {
-    if (!isLoading) {
-      setLoadingStageIdx(0);
-      return;
-    }
-    const timer = setInterval(() => {
-      setLoadingStageIdx((prev) => Math.min(prev + 1, LOADING_STAGES.length - 1));
-    }, 1400);
-    return () => clearInterval(timer);
-  }, [isLoading]);
-
   const samples = SAMPLE_QUESTIONS[dataset] || [];
+
+  function handleStreamEvent(ev: StreamEvent) {
+    if (ev.message) {
+      setStreamState((prev) => ({
+        ...prev,
+        stageMessage: ev.message || prev.stageMessage,
+        logs: [...prev.logs.slice(-4), ev.message!],
+      }));
+    }
+
+    if (ev.event === "graph_built" && ev.nodes !== undefined) {
+      setStreamState((prev) => ({
+        ...prev,
+        graph: { nodes: ev.nodes!, edges: ev.edges || 0 },
+      }));
+    } else if (ev.event === "retrieval_complete" && ev.count !== undefined) {
+      setStreamState((prev) => ({
+        ...prev,
+        retrieval: { count: ev.count! },
+      }));
+    } else if (ev.event === "isrel_decisions" && ev.hop !== undefined) {
+      setStreamState((prev) => {
+        const existingHopIdx = prev.hops.findIndex((h) => h.hop === ev.hop);
+        if (existingHopIdx >= 0) {
+          const updated = [...prev.hops];
+          updated[existingHopIdx] = {
+            ...updated[existingHopIdx],
+            kept: ev.kept,
+            pruned: ev.pruned,
+          };
+          return { ...prev, hops: updated };
+        }
+        return {
+          ...prev,
+          hops: [...prev.hops, { hop: ev.hop!, kept: ev.kept, pruned: ev.pruned }],
+        };
+      });
+    } else if (ev.event === "hop_complete" && ev.hop !== undefined) {
+      setStreamState((prev) => {
+        const existingHopIdx = prev.hops.findIndex((h) => h.hop === ev.hop);
+        if (existingHopIdx >= 0) {
+          const updated = [...prev.hops];
+          updated[existingHopIdx] = {
+            ...updated[existingHopIdx],
+            reasoning: ev.next_reasoning_step,
+          };
+          return { ...prev, hops: updated };
+        }
+        return {
+          ...prev,
+          hops: [...prev.hops, { hop: ev.hop!, reasoning: ev.next_reasoning_step }],
+        };
+      });
+    } else if (ev.event === "critique_complete") {
+      setStreamState((prev) => ({
+        ...prev,
+        critique: {
+          supporting: ev.supporting_count ?? 0,
+          isuse: Boolean(ev.isuse_score),
+        },
+      }));
+    }
+  }
 
   async function runQuery(targetQuestion: string, targetDataset: string) {
     setError("");
@@ -102,8 +163,18 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
     }
 
     setIsLoading(true);
+    setStreamState({
+      ...INITIAL_STREAM_STATE,
+      stageMessage: "Initiating hop-by-hop streaming pipeline...",
+    });
+
     try {
-      const result = await queryCritHop(normalizedQuestion, targetDataset);
+      const result = await queryCritHopStream(
+        normalizedQuestion,
+        targetDataset,
+        handleStreamEvent,
+      );
+
       setResult(result);
       if (onResult) {
         onResult(result);
@@ -164,7 +235,7 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
         </select>
       </div>
 
-      {samples.length > 0 && (
+      {samples.length > 0 && !isLoading && (
         <div className="space-y-1.5">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
             Quick test samples:
@@ -192,6 +263,84 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
         </div>
       )}
 
+      {/* Live SSE Stream Progress Card */}
+      {isLoading && (
+        <div className="rounded-2xl border border-emerald-400/30 bg-emerald-950/20 p-4 shadow-inner space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+                Live Hop-by-Hop Stream (SSE)
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-mono">Realtime Events</span>
+          </div>
+
+          <p className="text-xs font-medium text-emerald-100">
+            {streamState.stageMessage || "Executing pipeline..."}
+          </p>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+            {/* Stage 1: Graph */}
+            <div className={`rounded-xl border p-2 ${streamState.graph ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/[0.02] text-slate-400'}`}>
+              <div className="font-semibold">1. Graph</div>
+              <div className="mt-0.5 text-[10px]">
+                {streamState.graph ? `${streamState.graph.nodes}n · ${streamState.graph.edges}e` : 'Building...'}
+              </div>
+            </div>
+
+            {/* Stage 2: Retrieval */}
+            <div className={`rounded-xl border p-2 ${streamState.retrieval ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/[0.02] text-slate-400'}`}>
+              <div className="font-semibold">2. Retrieval</div>
+              <div className="mt-0.5 text-[10px]">
+                {streamState.retrieval ? `${streamState.retrieval.count} seeds ranked` : 'Pending'}
+              </div>
+            </div>
+
+            {/* Stage 3: Hops */}
+            <div className={`rounded-xl border p-2 ${streamState.hops.length > 0 ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/[0.02] text-slate-400'}`}>
+              <div className="font-semibold">3. Traversal</div>
+              <div className="mt-0.5 text-[10px]">
+                {streamState.hops.length > 0 ? `${streamState.hops.length} hop(s) active` : 'Pending'}
+              </div>
+            </div>
+
+            {/* Stage 4: Critiques */}
+            <div className={`rounded-xl border p-2 ${streamState.critique ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/[0.02] text-slate-400'}`}>
+              <div className="font-semibold">4. Critiques</div>
+              <div className="mt-0.5 text-[10px]">
+                {streamState.critique ? `${streamState.critique.supporting} verified` : 'Pending'}
+              </div>
+            </div>
+          </div>
+
+          {/* Hop decisions ticker */}
+          {streamState.hops.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              {streamState.hops.map((h) => (
+                <div key={h.hop} className="flex items-center justify-between rounded-lg bg-black/40 px-2.5 py-1 text-[11px] text-slate-300">
+                  <span className="font-mono text-emerald-400">Hop {h.hop} IsREL:</span>
+                  <span>
+                    {h.kept !== undefined ? (
+                      <>
+                        <span className="text-emerald-300 font-medium">{h.kept} kept</span>
+                        <span className="text-slate-500 mx-1.5">/</span>
+                        <span className="text-rose-300">{h.pruned} pruned</span>
+                      </>
+                    ) : (
+                      "Evaluating candidates..."
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-xs leading-5 text-red-200">
           <p className="font-semibold">Query Failed:</p>
@@ -202,20 +351,15 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
       <button
         type="submit"
         disabled={isLoading}
-        className="inline-flex w-full flex-col items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-75 shadow-lg shadow-emerald-500/10"
+        className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-75 shadow-lg shadow-emerald-500/10"
       >
         {isLoading ? (
-          <span className="flex flex-col items-center gap-1.5 py-0.5">
-            <span className="flex items-center gap-2">
-              <svg className="h-4 w-4 animate-spin text-slate-950" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              Traversing evidence graph...
-            </span>
-            <span className="text-[11px] font-normal text-slate-800">
-              {LOADING_STAGES[loadingStageIdx]}
-            </span>
+          <span className="flex items-center gap-2">
+            <svg className="h-4 w-4 animate-spin text-slate-950" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            Streaming multi-hop reasoning...
           </span>
         ) : (
           "Run CritHop"

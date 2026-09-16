@@ -52,6 +52,28 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type StreamEvent = {
+  event: string;
+  stage?: string;
+  message?: string;
+  nodes?: number;
+  edges?: number;
+  count?: number;
+  top_passages?: number[];
+  hop?: number;
+  candidates_count?: number;
+  kept?: number;
+  pruned?: number;
+  selected_count?: number;
+  next_node?: number | null;
+  next_reasoning_step?: string;
+  surviving_count?: number;
+  issup_scores?: boolean[];
+  isuse_score?: boolean;
+  supporting_count?: number;
+  result?: QueryResult;
+};
+
 export function queryCritHop(
   question: string,
   dataset: string,
@@ -60,6 +82,88 @@ export function queryCritHop(
     method: "POST",
     body: JSON.stringify({ question, dataset }),
   });
+}
+
+export async function queryCritHopStream(
+  question: string,
+  dataset: string,
+  onEvent: (event: StreamEvent) => void,
+): Promise<QueryResult> {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/query/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ question, dataset }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `Request failed with status ${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error("ReadableStream not supported in this environment.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let finalResult: QueryResult | null = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+
+      for (const part of parts) {
+        if (!part.trim()) continue;
+        const lines = part.split("\n");
+        let eventType = "message";
+        let dataStr = "";
+
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            eventType = line.replace(/^event:\s*/, "").trim();
+          } else if (line.startsWith("data:")) {
+            dataStr += line.replace(/^data:\s*/, "");
+          }
+        }
+
+        if (dataStr) {
+          try {
+            const parsed = JSON.parse(dataStr) as StreamEvent;
+            parsed.event = eventType || parsed.event;
+            onEvent(parsed);
+            if (parsed.event === "complete" && parsed.result) {
+              finalResult = parsed.result;
+            } else if (parsed.event === "error") {
+              throw new Error(parsed.message || "Streaming pipeline error");
+            }
+          } catch (err) {
+            if (err instanceof Error && err.message !== "Unexpected end of JSON input") {
+              if (dataStr.includes('"event":"error"')) {
+                throw err;
+              }
+            }
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!finalResult) {
+    throw new Error("Stream closed before receiving complete pipeline result.");
+  }
+
+  return finalResult;
 }
 
 export function getEvaluation(): Promise<ComparisonTable> {

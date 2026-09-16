@@ -32,12 +32,12 @@ class HopTraverser:
         self.hop_log: list[dict[str, Any]] = []
         self.decision_diff_counter = 0
 
-    def traverse(
+    def traverse_stream(
         self,
         question: str,
         start_passages: list[int],
-    ) -> list[str]:
-        """Traverse relevant passages and record every hop decision."""
+    ):
+        """Traverse relevant passages, yielding live events for each hop."""
         max_hops = int(self.config.get("max_hops", 3))
         top_k = int(self.config.get("top_k_after_isrel", 5))
         reasoning_step = question
@@ -53,6 +53,13 @@ class HopTraverser:
                 for n_idx in current_nodes:
                     if n_idx not in candidate_indices:
                         candidate_indices.append(n_idx)
+
+            yield {
+                "event": "hop_start",
+                "hop": hop_number + 1,
+                "candidates_count": len(candidate_indices),
+                "reasoning_step": reasoning_step,
+            }
             decisions: dict[int, bool] = {}
 
             if self.reranker is not None:
@@ -103,6 +110,13 @@ class HopTraverser:
             pruned = len(decisions) - kept
             print(f"IsREL decisions: {kept} kept, {pruned} pruned")
 
+            yield {
+                "event": "isrel_decisions",
+                "hop": hop_number + 1,
+                "kept": kept,
+                "pruned": pruned,
+            }
+
             relevant_indices = [
                 node_idx
                 for node_idx in candidate_indices
@@ -152,9 +166,22 @@ class HopTraverser:
             self.hop_log[-1]["next_node"] = next_node
             self.hop_log[-1]["llm_reasoning_step"] = reasoning_step
 
+            yield {
+                "event": "hop_complete",
+                "hop": hop_number + 1,
+                "selected_count": len(relevant_indices),
+                "next_node": next_node,
+                "next_reasoning_step": reasoning_step,
+            }
+
             # Early termination: if sufficient multi-hop evidence gathered
             if hop_number >= 1 and len(set(surviving_indices)) >= 2:
                 print(f"HopTraverser early termination at hop {hop_number + 1}: sufficient evidence gathered")
+                yield {
+                    "event": "early_termination",
+                    "hop": hop_number + 1,
+                    "surviving_count": len(set(surviving_indices)),
+                }
                 break
 
         if self.reranker is not None:
@@ -165,7 +192,26 @@ class HopTraverser:
         ordered_unique_indices = list(dict.fromkeys(surviving_indices))
         if not ordered_unique_indices and start_passages:
             ordered_unique_indices = [start_passages[0]]
-        return [self.graph.get_passage(idx) for idx in ordered_unique_indices]
+        final_passages = [self.graph.get_passage(idx) for idx in ordered_unique_indices]
+        yield {
+            "event": "traversal_complete",
+            "passages": final_passages,
+        }
+
+    def traverse(
+        self,
+        question: str,
+        start_passages: list[int],
+        on_event: Any = None,
+    ) -> list[str]:
+        """Traverse relevant passages and record every hop decision."""
+        final_passages = []
+        for ev in self.traverse_stream(question, start_passages):
+            if on_event:
+                on_event(ev)
+            if ev.get("event") == "traversal_complete":
+                final_passages = ev.get("passages", [])
+        return final_passages
 
     def _neighbor_candidates(self, current_nodes: list[int]) -> list[int]:
         candidates: list[int] = []

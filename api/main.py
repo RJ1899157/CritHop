@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from pipeline.crithop import CritHop
@@ -386,6 +387,27 @@ def query(request: QueryRequest, http_request: Request) -> dict:
     return http_request.app.state.crithop.run(
         request.question,
         passages,
+    )
+
+
+@app.post("/query/stream")
+def query_stream(request: QueryRequest, http_request: Request):
+    """Stream CritHop pipeline stages and progressive hop-by-hop updates via SSE."""
+    _, _, passages = _find_context(request.dataset, request.question)
+
+    def event_generator():
+        for ev in http_request.app.state.crithop.run_stream(request.question, passages):
+            event_type = ev.get("event", "message")
+            yield f"event: {event_type}\ndata: {json.dumps(ev)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

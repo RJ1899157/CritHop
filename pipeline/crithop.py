@@ -160,6 +160,137 @@ class CritHop:
                 "retrieval_retry": False,
             }
 
+    def run_stream(self, question: str, context_passages: list[str]):
+        """Stream progress events across every pipeline stage, finishing with the full result."""
+        try:
+            yield {
+                "event": "stage",
+                "stage": "graph_init",
+                "message": f"Building passage graph for {len(context_passages)} evidence candidates...",
+            }
+            self.graph = PassageGraph(context_passages, self.config)
+            graph_data = self.graph.build()
+            graph_dict = getattr(self.graph, "graph", None)
+            if not isinstance(graph_dict, dict):
+                graph_dict = graph_data if isinstance(graph_data, dict) else {}
+            n_nodes = len(graph_dict.get("nodes", {}))
+            n_edges = sum(len(neighbors) for neighbors in graph_dict.get("adjacency", {}).values()) // 2
+
+            yield {
+                "event": "graph_built",
+                "nodes": n_nodes,
+                "edges": n_edges,
+                "message": f"PassageGraph active: {n_nodes} nodes, {n_edges} semantic similarity edges",
+            }
+
+            yield {
+                "event": "stage",
+                "stage": "retrieval",
+                "message": "Executing hybrid lexical (BM25) & dense (BGE) retrieval...",
+            }
+            self.bm25 = BM25Retriever(context_passages)
+            self.bge = BGERetriever(
+                context_passages,
+                self.config.get("embedding_model", "BAAI/bge-base-en-v1.5"),
+                self.config.get("embedding_device", "cpu"),
+                embeddings=getattr(self.graph, "embeddings", None),
+            )
+            self.hybrid = HybridRetriever(self.bm25, self.bge)
+
+            top_k = int(self.config.get("top_k_retrieval", 10))
+            initial_results = self.hybrid.retrieve(question, top_k)
+            start_passages = [index for index, _ in initial_results]
+
+            yield {
+                "event": "retrieval_complete",
+                "count": len(initial_results),
+                "top_passages": start_passages[:5],
+                "message": f"Hybrid retriever ranked {len(initial_results)} seed passages",
+            }
+
+            self.traverser = HopTraverser(
+                graph=self.graph,
+                config=self.config,
+                groq_client=self.groq_client,
+                isrel=self.isrel,
+                reranker=self.reranker,
+            )
+
+            traversed_passages = []
+            for ev in self.traverser.traverse_stream(question, start_passages):
+                if ev.get("event") == "traversal_complete":
+                    traversed_passages = ev.get("passages", [])
+                else:
+                    yield ev
+
+            passages_for_generation = traversed_passages or [
+                context_passages[index] for index in start_passages
+            ]
+
+            yield {
+                "event": "stage",
+                "stage": "generation",
+                "message": f"Synthesizing grounded answer and running Self-RAG critiques over {len(passages_for_generation)} passages...",
+            }
+
+            generation_result = self.generator.generate(
+                question,
+                passages_for_generation,
+            )
+
+            yield {
+                "event": "critique_complete",
+                "issup_scores": generation_result["issup_scores"],
+                "isuse_score": generation_result["isuse_score"],
+                "supporting_count": len(generation_result.get("supporting_passages", [])),
+                "message": f"Self-RAG: verified {len(generation_result.get('supporting_passages', []))} supporting passages, IsUSE: {'valid' if generation_result['isuse_score'] else 'retried'}",
+            }
+
+            isrel_decisions = [
+                decision
+                for hop in self.traverser.hop_log
+                for decision in hop["isrel_decisions"].values()
+            ]
+
+            final_result = {
+                "question": question,
+                "answer": generation_result["answer"],
+                "hop_trace": self.traverser.hop_log,
+                "critique_log": {
+                    "isrel_decisions": isrel_decisions,
+                    "issup_decisions": generation_result["issup_scores"],
+                    "isuse_decision": generation_result["isuse_score"],
+                },
+                "supporting_passages": generation_result["supporting_passages"],
+                "retrieval_retry": generation_result["retrieval_retry"],
+            }
+
+            yield {
+                "event": "complete",
+                "result": final_result,
+            }
+
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            error_result = {
+                "question": question,
+                "answer": f"Pipeline error: {exc}",
+                "hop_trace": [],
+                "critique_log": {
+                    "isrel_decisions": [],
+                    "issup_decisions": [],
+                    "isuse_decision": False,
+                },
+                "supporting_passages": [],
+                "retrieval_retry": False,
+            }
+            yield {
+                "event": "error",
+                "message": str(exc),
+                "result": error_result,
+            }
+
     def _create_reranker(self):
         try:
             from reranker.reranker import Reranker
