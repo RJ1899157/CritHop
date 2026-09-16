@@ -215,7 +215,7 @@ export default function ResultsPage() {
       <div className="w-full">
         <HopTrace
           hopTrace={result.hop_trace ?? []}
-          graphData={result.graph}
+          graphData={result.graph ?? result.graph_data}
           supportingPassages={result.supporting_passages ?? []}
           critiqueLog={result.critique_log}
           retrievalRetry={result.retrieval_retry}

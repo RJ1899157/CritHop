@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import confetti from "canvas-confetti";
 import { queryCritHopStream, type QueryResult, type StreamEvent, type GraphData } from "@/lib/api";
 import { useQueryResult } from "@/context/ResultContext";
 
@@ -180,16 +179,6 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
       );
 
       setResult(result);
-      try {
-        confetti({
-          particleCount: 75,
-          spread: 65,
-          origin: { y: 0.65 },
-          colors: ["#00f0ff", "#32d74b", "#bf5af2", "#ffffff"],
-        });
-      } catch {
-        // ignore
-      }
       if (onResult) {
         onResult(result);
       } else {

@@ -63,26 +63,29 @@ def call_groq(
     ``retries`` is the number of retries after the initial request. Rate-limit
     retries use exponential waits of 2, 4, 8, 16, and 32 seconds.
     """
+    is_real_groq = client.__class__.__module__.startswith("groq")
     key = _cache_key(model, messages)
-    if use_cache:
+    if use_cache and is_real_groq:
         if key in _GLOBAL_RESPONSE_CACHE:
             logger.debug("Groq global cache hit: %s", key[:12])
             return _GLOBAL_RESPONSE_CACHE[key]
 
-    try:
-        client_cache = _RESPONSE_CACHE.setdefault(client, {})
-    except TypeError:
-        client_cache = getattr(client, "_crithop_response_cache", None)
-        if client_cache is None:
-            client_cache = {}
-            try:
-                setattr(client, "_crithop_response_cache", client_cache)
-            except AttributeError:
-                pass
-    cached = client_cache.get(key) if use_cache else None
-    if cached is not None:
-        logger.debug("Groq response cache hit: %s", key[:12])
-        return cached
+    client_cache = None
+    if is_real_groq:
+        try:
+            client_cache = _RESPONSE_CACHE.setdefault(client, {})
+        except TypeError:
+            client_cache = getattr(client, "_crithop_response_cache", None)
+            if client_cache is None:
+                client_cache = {}
+                try:
+                    setattr(client, "_crithop_response_cache", client_cache)
+                except AttributeError:
+                    pass
+        cached = client_cache.get(key) if use_cache else None
+        if cached is not None:
+            logger.debug("Groq response cache hit: %s", key[:12])
+            return cached
 
     for attempt in range(retries + 1):
         try:
@@ -101,8 +104,9 @@ def call_groq(
             if not text and hasattr(msg, "reasoning") and msg.reasoning:
                 text = msg.reasoning.strip()
 
-            if use_cache and text:
-                client_cache[key] = text
+            if use_cache and text and is_real_groq:
+                if client_cache is not None:
+                    client_cache[key] = text
                 if len(_GLOBAL_RESPONSE_CACHE) >= _MAX_CACHE_SIZE:
                     # Evict oldest entry
                     first_k = next(iter(_GLOBAL_RESPONSE_CACHE))

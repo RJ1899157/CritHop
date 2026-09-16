@@ -80,6 +80,7 @@ The homepage query dashboard features an ultra-clean cyber-industrial interface.
 
 ### 2. Full-Width Reasoning Studio & Traversal Playback Engine
 Located in the dedicated `/results` workspace, users can scrub, pause, and replay every multi-hop reasoning decision:
+- **Active Early Discovery Stages:** Step 0 highlights initial graph construction and entry core nodes, Step 1 displays hybrid BM25/BGE retrieval laser beams, and Step 2 showcases candidate exploration scanning.
 - **Interactive Scrubber Slider:** Jump directly to any milestone (Init ➔ Seeds ➔ Hop Eval ➔ Trim ➔ Final).
 - **Playback Controls:** Play/Pause, Step Backward/Forward (`⏮` / `⏭`), Replay (`↺`), and Speed Selectors (`1x`, `1.5x`, `2x`).
 - **Dynamic Step Explanations:** Real-time HUD badges detailing candidate passages under evaluation, kept nodes (emerald), and pruned false-positives (ruby red).
@@ -92,10 +93,11 @@ Located in the dedicated `/results` workspace, users can scrub, pause, and repla
 
 ### 3. Interactive 3D WebGL Knowledge Nebula (Three.js)
 Switch instantly to the 3D WebGL Nebula without interrupting playback:
-- **3D Celestial Spheres:** Dynamic emission shaders representing evidence passages.
-- **Spatial OrbitControls:** Left-drag to orbit, right-drag to pan, scroll to zoom with smooth damping.
-- **Cyberpunk Billboard Labels:** Floating title sprites attached to every evidence node.
-- **Cosmic Particle Field:** 450 floating background star particles in depth-attenuated cosmic fog.
+- **Zero-Gravity Harmonic Floating Motion:** Celestial evidence nodes gently drift and breathe with organic harmonic wave equations, with similarity edges and traversal lasers dynamically updating in real-time.
+- **Spinning Gyroscopic Containment Rings:** Dual-axis equatorial and polar rotating rings encircle active candidate and traversed evidence nodes.
+- **High-Intensity Luminous Shaders:** Radiant emission materials, pulsating outer aura shells, and laser cylinders with flowing white photons.
+- **Cosmic Galaxy Particle Field:** 1,000 multi-colored starlight particles with additive blending across deep space cosmic fog.
+- **Safe Spatial OrbitControls:** Left-drag to orbit, right-drag to pan, scroll to zoom with smooth damping and drag-vs-click disambiguation.
 - **Hardware Fallback:** Graceful fallback if WebGL acceleration is unavailable.
 
 <p align="center">

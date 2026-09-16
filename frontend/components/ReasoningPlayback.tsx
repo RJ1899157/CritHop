@@ -42,7 +42,22 @@ export function buildPlaybackFrames(
     if (isSup) supportingIds.push(n.id);
   });
 
-  // Frame 0: Initial Knowledge Graph
+  // Identify seed nodes for initial retrieval highlighting
+  const firstHopConsidered =
+    hopTrace.length > 0 && Array.isArray(hopTrace[0].passages_considered) && hopTrace[0].passages_considered.length > 0
+      ? (hopTrace[0].passages_considered as number[])
+      : graphData.nodes.slice(0, 5).map((n) => n.id);
+
+  const initialSeedId = firstHopConsidered[0] ?? graphData.nodes[0]?.id ?? 0;
+  const secondarySeedId = firstHopConsidered[1] ?? graphData.nodes[1]?.id ?? 1;
+
+  // Frame 0: Initial Knowledge Graph Synthesis & Core Hub Discovery
+  const initCoreEdges: Array<{ source: number; target: number }> = [];
+  graphData.edges
+    .filter((e) => e.source === initialSeedId || e.target === initialSeedId)
+    .slice(0, 3)
+    .forEach((e) => initCoreEdges.push({ source: e.source, target: e.target }));
+
   frames.push({
     stepIndex: 0,
     totalSteps: 1,
@@ -50,41 +65,45 @@ export function buildPlaybackFrames(
     title: "Step 0: Semantic Passage Graph Constructed",
     subtitle: `${graphData.nodes.length} Evidence Nodes · ${graphData.edges.length} Semantic Similarity Edges`,
     description:
-      "All retrieved passage candidates are mapped into a connected semantic topology. Nodes represent candidate passages, and edges denote semantic similarity (threshold ≥ 0.3).",
+      "All retrieved passage candidates are mapped into a connected semantic topology. The pipeline identifies core entry points and semantic similarity clusters.",
     activeCandidateIds: graphData.nodes.map((n) => n.id),
-    keptNodeIds: [],
+    keptNodeIds: [initialSeedId],
     prunedNodeIds: [],
-    traversedNodeIds: [],
+    traversedNodeIds: [initialSeedId],
     supportingNodeIds: [],
-    traversalEdges: [],
+    traversalEdges: initCoreEdges.length > 0 ? initCoreEdges : [{ source: initialSeedId, target: secondarySeedId }],
   });
 
-  // Frame 1: Seed Retrieval
-  const firstHopConsidered =
-    hopTrace.length > 0 && Array.isArray(hopTrace[0].passages_considered)
-      ? (hopTrace[0].passages_considered as number[])
-      : graphData.nodes.slice(0, 5).map((n) => n.id);
+  // Frame 1: Seed Retrieval & Hybrid BGE/BM25 Scoring
+  const topSeeds = firstHopConsidered.slice(0, 3);
+  const retrievalBeams: Array<{ source: number; target: number }> = [];
+  if (topSeeds.length >= 2) {
+    retrievalBeams.push({ source: topSeeds[0], target: topSeeds[1] });
+    if (topSeeds.length >= 3) {
+      retrievalBeams.push({ source: topSeeds[0], target: topSeeds[2] });
+    }
+  }
 
   frames.push({
     stepIndex: 1,
     totalSteps: 1,
     phase: "retrieval",
     title: "Step 1: Hybrid Lexical (BM25) & Dense (BGE) Retrieval",
-    subtitle: `${firstHopConsidered.length} Seed Passages Ranked`,
+    subtitle: `${firstHopConsidered.length} Seed Passages Ranked · Top Entry Bridges Identified`,
     description:
-      "Hybrid retrieval identifies initial entry points into the evidence graph, combining BM25 exact keyword matching with BGE dense semantic embeddings.",
+      "Hybrid retrieval identifies initial entry points into the evidence graph, combining BM25 exact keyword matching with BGE dense semantic embeddings to anchor the search.",
     activeCandidateIds: firstHopConsidered,
-    keptNodeIds: [],
+    keptNodeIds: topSeeds,
     prunedNodeIds: [],
-    traversedNodeIds: [],
+    traversedNodeIds: topSeeds.slice(0, 2),
     supportingNodeIds: [],
-    traversalEdges: [],
+    traversalEdges: retrievalBeams.length > 0 ? retrievalBeams : [{ source: initialSeedId, target: secondarySeedId }],
   });
 
   // Multi-Hop Traversal & Pruning Frames
-  let accumulatedKept: number[] = [];
+  let accumulatedKept: number[] = [...topSeeds];
   let accumulatedPruned: number[] = [];
-  let accumulatedTraversed: number[] = [];
+  let accumulatedTraversed: number[] = [initialSeedId];
   let accumulatedEdges: Array<{ source: number; target: number }> = [];
 
   hopTrace.forEach((h, hIdx) => {
@@ -111,7 +130,22 @@ export function buildPlaybackFrames(
     const reasoningTarget = String(h.reasoning_step || "Multi-hop query step");
     const nextReasoning = String(h.llm_reasoning_step || "");
 
-    // Evaluation Frame for this hop
+    // Current hop origin node from prior traversal
+    const currentOrigin =
+      accumulatedTraversed.length > 0
+        ? accumulatedTraversed[accumulatedTraversed.length - 1]
+        : (considered[0] ?? initialSeedId);
+
+    // Dynamic scanning exploration beams from currentOrigin to considered neighbors
+    const explorationBeams: Array<{ source: number; target: number }> = [
+      ...accumulatedEdges,
+      ...considered
+        .filter((cId) => cId !== currentOrigin)
+        .slice(0, 4)
+        .map((cId) => ({ source: currentOrigin, target: cId })),
+    ];
+
+    // Evaluation Frame for this hop: active exploration beams fanning out to candidates
     frames.push({
       stepIndex: frames.length,
       totalSteps: 1,
@@ -119,13 +153,13 @@ export function buildPlaybackFrames(
       hopNumber: hopNum,
       title: `Hop ${hopNum}: Evaluating ${considered.length} Candidate Passages`,
       subtitle: `Target: "${reasoningTarget.slice(0, 70)}..."`,
-      description: `HopTraverser inspects adjacent candidate nodes in the semantic graph to find bridge entities relevant to the question.`,
+      description: `HopTraverser inspects adjacent candidate nodes in the semantic graph from Node #${currentOrigin} to find bridge entities relevant to the question.`,
       activeCandidateIds: considered,
       keptNodeIds: [...accumulatedKept],
       prunedNodeIds: [...accumulatedPruned],
-      traversedNodeIds: [...accumulatedTraversed],
+      traversedNodeIds: Array.from(new Set([...accumulatedTraversed, currentOrigin])),
       supportingNodeIds: [],
-      traversalEdges: [...accumulatedEdges],
+      traversalEdges: explorationBeams,
     });
 
     // Pruning & Selection Frame for this hop

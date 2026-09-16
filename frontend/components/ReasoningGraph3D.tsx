@@ -25,11 +25,25 @@ export default function ReasoningGraph3D({
 }: ReasoningGraph3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const nodeMeshesRef = useRef<Map<number, { mesh: THREE.Mesh; label: THREE.Sprite }>>(new Map());
+
+  const nodeMeshesRef = useRef<
+    Map<number, { mesh: THREE.Mesh; label: THREE.Sprite; auraMesh: THREE.Mesh }>
+  >(new Map());
+  const nodeBasePositionsRef = useRef<Map<number, THREE.Vector3>>(new Map());
   const nodePositionsRef = useRef<Map<number, THREE.Vector3>>(new Map());
+  const baseLinesAttrRef = useRef<THREE.BufferAttribute | null>(null);
+
   const traversalGroupRef = useRef<THREE.Group | null>(null);
+  const traversalMeshesRef = useRef<
+    Array<{ mesh: THREE.Mesh; auraMesh: THREE.Mesh; source: number; target: number }>
+  >([]);
+  const photonsRef = useRef<
+    Array<{ source: number; target: number; mesh: THREE.Mesh; offset: number }>
+  >([]);
+
   const candidateRingsGroupRef = useRef<THREE.Group | null>(null);
-  const photonsRef = useRef<Array<{ p1: THREE.Vector3; p2: THREE.Vector3; mesh: THREE.Mesh; offset: number }>>([]);
+  const candidateRingsDataRef = useRef<Array<{ group: THREE.Group; nodeId: number }>>([]);
+
   const pointerDownPosRef = useRef({ x: 0, y: 0 });
   const onSelectNodeRef = useRef(onSelectNode);
 
@@ -41,13 +55,12 @@ export default function ReasoningGraph3D({
     onSelectNodeRef.current = onSelectNode;
   }, [onSelectNode]);
 
-  // Classify nodes
-  const { traversedSet, prunedSet, hopMap, supportingIndices, keptSet, activeCandidateSet } = useMemo(() => {
+  // Classify nodes based on playback frame or full hop trace
+  const { traversedSet, prunedSet, supportingIndices, keptSet, activeCandidateSet } = useMemo(() => {
     if (playbackFrame) {
       return {
         traversedSet: new Set<number>(playbackFrame.traversedNodeIds),
         prunedSet: new Set<number>(playbackFrame.prunedNodeIds),
-        hopMap: new Map<number, number>(),
         supportingIndices: new Set<number>(playbackFrame.supportingNodeIds),
         keptSet: new Set<number>(playbackFrame.keptNodeIds),
         activeCandidateSet: new Set<number>(playbackFrame.activeCandidateIds),
@@ -56,16 +69,10 @@ export default function ReasoningGraph3D({
 
     const traversed = new Set<number>();
     const pruned = new Set<number>();
-    const hopM = new Map<number, number>();
 
-    hopTrace.forEach((h, hIdx) => {
-      const hopNum = typeof h.hop === "number" ? h.hop : hIdx + 1;
+    hopTrace.forEach((h) => {
       const selected = Array.isArray(h.selected_passages) ? h.selected_passages : [];
-      selected.forEach((idx) => {
-        const num = Number(idx);
-        traversed.add(num);
-        hopM.set(num, hopNum);
-      });
+      selected.forEach((idx) => traversed.add(Number(idx)));
 
       const decisions =
         h.isrel_decisions && typeof h.isrel_decisions === "object"
@@ -87,7 +94,6 @@ export default function ReasoningGraph3D({
     return {
       traversedSet: traversed,
       prunedSet: pruned,
-      hopMap: hopM,
       supportingIndices: supIndices,
       keptSet: new Set<number>(),
       activeCandidateSet: new Set<number>(),
@@ -109,17 +115,17 @@ export default function ReasoningGraph3D({
     const width = container.clientWidth || 800;
     const h = height;
 
-    // 1. Scene, Camera, Renderer
+    // 1. Scene, Camera, Renderer with deep cyber-space aesthetic
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x04060a);
-    scene.fog = new THREE.FogExp2(0x04060a, 0.015);
+    scene.background = new THREE.Color(0x020409);
+    scene.fog = new THREE.FogExp2(0x020409, 0.012);
 
     const camera = new THREE.PerspectiveCamera(50, width / h, 0.1, 1000);
-    camera.position.set(0, 15, 38);
+    camera.position.set(0, 16, 42);
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
     } catch (err) {
       setWebglError(err instanceof Error ? err.message : "WebGL context not available");
       return;
@@ -135,54 +141,81 @@ export default function ReasoningGraph3D({
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.autoRotate = autoRotate;
-    controls.autoRotateSpeed = 0.8;
-    controls.maxDistance = 85;
-    controls.minDistance = 8;
+    controls.autoRotateSpeed = 0.85;
+    controls.maxDistance = 90;
+    controls.minDistance = 6;
     controlsRef.current = controls;
 
-    // 3. Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    // 3. High-Intensity Luminous Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
 
-    const cyanLight = new THREE.PointLight(0x00f0ff, 2.5, 70);
-    cyanLight.position.set(20, 20, 20);
+    // Electric Cyan Key Point Light
+    const cyanLight = new THREE.PointLight(0x00f0ff, 4.5, 120);
+    cyanLight.position.set(25, 25, 25);
     scene.add(cyanLight);
 
-    const purpleLight = new THREE.PointLight(0xa855f7, 2.5, 70);
-    purpleLight.position.set(-20, -15, -20);
+    // Fuchsia / Purple Rim Point Light
+    const purpleLight = new THREE.PointLight(0xe879f9, 4.0, 120);
+    purpleLight.position.set(-25, -20, -25);
     scene.add(purpleLight);
 
-    // 4. Background Star / Cosmic Dust Particles
-    const particleCount = 450;
-    const particleGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    for (let i = 0; i < particleCount * 3; i += 3) {
-      positions[i] = (Math.random() - 0.5) * 90;
-      positions[i + 1] = (Math.random() - 0.5) * 90;
-      positions[i + 2] = (Math.random() - 0.5) * 90;
+    // Hyper-Gold Secondary Point Light
+    const goldLight = new THREE.PointLight(0xfacc15, 3.0, 90);
+    goldLight.position.set(0, 30, -10);
+    scene.add(goldLight);
+
+    // 4. Vibrant Multi-Colored Galaxy Starfield (1,000 Particles)
+    const starCount = 1000;
+    const starGeo = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(starCount * 3);
+    const starColors = new Float32Array(starCount * 3);
+
+    const palette = [
+      new THREE.Color(0x00f0ff), // electric cyan
+      new THREE.Color(0xf472b6), // pink nebula
+      new THREE.Color(0xc084fc), // violet
+      new THREE.Color(0xfde047), // starlight gold
+      new THREE.Color(0xffffff), // pure white
+    ];
+
+    for (let i = 0; i < starCount; i++) {
+      const i3 = i * 3;
+      starPositions[i3] = (Math.random() - 0.5) * 160;
+      starPositions[i3 + 1] = (Math.random() - 0.5) * 160;
+      starPositions[i3 + 2] = (Math.random() - 0.5) * 160;
+
+      const col = palette[Math.floor(Math.random() * palette.length)];
+      starColors[i3] = col.r;
+      starColors[i3 + 1] = col.g;
+      starColors[i3 + 2] = col.b;
     }
-    particleGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const particleMat = new THREE.PointsMaterial({
-      color: 0x38bdf8,
-      size: 0.25,
+
+    starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+    starGeo.setAttribute("color", new THREE.BufferAttribute(starColors, 3));
+
+    const starMat = new THREE.PointsMaterial({
+      size: 0.35,
+      vertexColors: true,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
     });
-    const starField = new THREE.Points(particleGeo, particleMat);
+    const starField = new THREE.Points(starGeo, starMat);
     scene.add(starField);
 
-    // Helper to create text sprite
+    // Helper to create text sprite badge
     function createTextSprite(text: string, color: string): THREE.Sprite {
       const canvas = document.createElement("canvas");
       canvas.width = 256;
       canvas.height = 64;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.fillStyle = "rgba(4, 6, 12, 0.8)";
+        ctx.fillStyle = "rgba(2, 6, 16, 0.85)";
         ctx.roundRect(4, 4, 248, 56, 12);
         ctx.fill();
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
         ctx.stroke();
 
         ctx.fillStyle = "#ffffff";
@@ -195,36 +228,42 @@ export default function ReasoningGraph3D({
       texture.minFilter = THREE.LinearFilter;
       const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
       const sprite = new THREE.Sprite(spriteMat);
-      sprite.scale.set(7, 1.8, 1);
+      sprite.scale.set(7.5, 1.9, 1);
       return sprite;
     }
 
-    // 5. Position Nodes on an 3D Ellipsoid
+    // 5. Position Nodes on 3D Ellipsoid & Store Base Coordinates
     const nodes = graphData.nodes;
     const nodeCount = nodes.length || 1;
     const nodeObjects: THREE.Mesh[] = [];
-    const nodePositions = new Map<number, THREE.Vector3>();
-    const nodeMap = new Map<number, { mesh: THREE.Mesh; label: THREE.Sprite }>();
+    const basePositions = new Map<number, THREE.Vector3>();
+    const currentPositions = new Map<number, THREE.Vector3>();
+    const nodeMap = new Map<
+      number,
+      { mesh: THREE.Mesh; label: THREE.Sprite; auraMesh: THREE.Mesh }
+    >();
 
     nodes.forEach((n, i) => {
       const phi = Math.acos(-1 + (2 * i) / nodeCount);
       const theta = Math.sqrt(nodeCount * Math.PI) * phi;
-      const radius = 13.5;
+      const radius = 14.5;
 
       const pos = new THREE.Vector3(
         radius * Math.sin(phi) * Math.cos(theta),
-        radius * Math.cos(phi) * 0.75,
+        radius * Math.cos(phi) * 0.78,
         radius * Math.sin(phi) * Math.sin(theta)
       );
-      nodePositions.set(n.id, pos);
+      basePositions.set(n.id, pos.clone());
+      currentPositions.set(n.id, pos.clone());
 
-      const sphereGeo = new THREE.SphereGeometry(1.4, 24, 24);
+      // Inner Core Sphere
+      const sphereGeo = new THREE.SphereGeometry(1.45, 32, 32);
       const sphereMat = new THREE.MeshStandardMaterial({
         color: 0x00f0ff,
-        emissive: 0x004455,
-        emissiveIntensity: 0.8,
-        roughness: 0.2,
-        metalness: 0.3,
+        emissive: 0x006688,
+        emissiveIntensity: 2.2,
+        roughness: 0.15,
+        metalness: 0.85,
         transparent: false,
         opacity: 1.0,
       });
@@ -235,40 +274,71 @@ export default function ReasoningGraph3D({
       scene.add(sphereMesh);
       nodeObjects.push(sphereMesh);
 
+      // Outer Glowing Aura Shell
+      const auraGeo = new THREE.SphereGeometry(1.95, 20, 20);
+      const auraMat = new THREE.MeshBasicMaterial({
+        color: 0x00f0ff,
+        transparent: true,
+        opacity: 0.25,
+        blending: THREE.AdditiveBlending,
+      });
+      const auraMesh = new THREE.Mesh(auraGeo, auraMat);
+      auraMesh.position.copy(pos);
+      scene.add(auraMesh);
+
+      // Billboard Text Label
       const truncatedTitle = n.title.length > 14 ? `${n.title.slice(0, 12)}…` : n.title;
       const sprite = createTextSprite(`#${n.id} ${truncatedTitle}`, "#00f0ff");
-      sprite.position.set(pos.x, pos.y + 2.5, pos.z);
+      sprite.position.set(pos.x, pos.y + 2.7, pos.z);
       scene.add(sprite);
 
-      nodeMap.set(n.id, { mesh: sphereMesh, label: sprite });
+      nodeMap.set(n.id, { mesh: sphereMesh, label: sprite, auraMesh });
     });
 
     nodeMeshesRef.current = nodeMap;
-    nodePositionsRef.current = nodePositions;
+    nodeBasePositionsRef.current = basePositions;
+    nodePositionsRef.current = currentPositions;
 
-    // 6. Connect Base Similarity Edges
+    // 6. Connect Dynamic Base Similarity Edges
     const edges = graphData.edges;
-    const edgeLinePositions: number[] = [];
-    const edgeColors: number[] = [];
+    const edgeCount = edges.length;
+    const edgePositions = new Float32Array(edgeCount * 6);
+    const edgeColors = new Float32Array(edgeCount * 6);
 
-    edges.forEach((edge) => {
-      const p1 = nodePositions.get(edge.source);
-      const p2 = nodePositions.get(edge.target);
-      if (!p1 || !p2) return;
-
-      edgeLinePositions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-      edgeColors.push(0.0, 0.5, 0.6, 0.0, 0.5, 0.6);
+    edges.forEach((edge, eIdx) => {
+      const p1 = currentPositions.get(edge.source);
+      const p2 = currentPositions.get(edge.target);
+      const idx = eIdx * 6;
+      if (p1 && p2) {
+        edgePositions[idx] = p1.x;
+        edgePositions[idx + 1] = p1.y;
+        edgePositions[idx + 2] = p1.z;
+        edgePositions[idx + 3] = p2.x;
+        edgePositions[idx + 4] = p2.y;
+        edgePositions[idx + 5] = p2.z;
+      }
+      // Bright neon cyan with slight transparency
+      edgeColors[idx] = 0.0;
+      edgeColors[idx + 1] = 0.75;
+      edgeColors[idx + 2] = 0.95;
+      edgeColors[idx + 3] = 0.0;
+      edgeColors[idx + 4] = 0.75;
+      edgeColors[idx + 5] = 0.95;
     });
 
-    if (edgeLinePositions.length > 0) {
+    if (edgeCount > 0) {
       const edgeGeo = new THREE.BufferGeometry();
-      edgeGeo.setAttribute("position", new THREE.Float32BufferAttribute(edgeLinePositions, 3));
-      edgeGeo.setAttribute("color", new THREE.Float32BufferAttribute(edgeColors, 3));
+      const posAttr = new THREE.BufferAttribute(edgePositions, 3);
+      posAttr.setUsage(THREE.DynamicDrawUsage);
+      edgeGeo.setAttribute("position", posAttr);
+      edgeGeo.setAttribute("color", new THREE.BufferAttribute(edgeColors, 3));
+      baseLinesAttrRef.current = posAttr;
+
       const edgeMat = new THREE.LineBasicMaterial({
         vertexColors: true,
         transparent: true,
-        opacity: 0.25,
-        linewidth: 1,
+        opacity: 0.35,
+        linewidth: 1.5,
       });
       const lines = new THREE.LineSegments(edgeGeo, edgeMat);
       scene.add(lines);
@@ -283,7 +353,7 @@ export default function ReasoningGraph3D({
     scene.add(candidateRingsGroup);
     candidateRingsGroupRef.current = candidateRingsGroup;
 
-    // 8. Safe Raycaster for Selection (Distinguishes Drag/Orbit from Click)
+    // 8. Safe Raycaster for Node Selection (Ignores Camera Orbit Drags)
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -297,7 +367,7 @@ export default function ReasoningGraph3D({
         e.clientX - pointerDownPosRef.current.x,
         e.clientY - pointerDownPosRef.current.y
       );
-      if (dist > 6) return; // User was dragging to orbit the camera, ignore!
+      if (dist > 6) return; // Ignore drag motions
 
       const rect = container.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -324,28 +394,101 @@ export default function ReasoningGraph3D({
     renderer.domElement.addEventListener("pointerup", handlePointerUp);
     renderer.domElement.addEventListener("wheel", handleWheel, { passive: false });
 
-    // 9. Animation Loop
+    // 9. High-Performance Harmonic Animation Loop (Zero-Gravity Floating)
     let animId: number;
     let clock = 0;
+    const upVector = new THREE.Vector3(0, 1, 0);
+
     function animate() {
       animId = requestAnimationFrame(animate);
-      clock += 0.015;
-      starField.rotation.y += 0.0003;
+      clock += 0.016;
 
-      // Animate flowing photons along 3D traversal lasers
-      photonsRef.current.forEach((ph) => {
-        const t = ((clock * 0.75 + ph.offset) % 1);
-        ph.mesh.position.lerpVectors(ph.p1, ph.p2, t);
+      // Slow majestic galaxy rotation
+      starField.rotation.y += 0.0004;
+      starField.rotation.x += 0.0002;
+
+      // Harmonic Zero-Gravity Node Floating Movement
+      nodeMeshesRef.current.forEach(({ mesh, label, auraMesh }, id) => {
+        const base = basePositions.get(id);
+        if (!base) return;
+
+        // Unique organic orbital harmonic oscillations
+        const dx = Math.sin(clock * 1.6 + id * 1.2) * 0.45;
+        const dy = Math.cos(clock * 1.3 + id * 1.8) * 0.55;
+        const dz = Math.sin(clock * 1.1 + id * 2.2) * 0.45;
+
+        const cur = new THREE.Vector3(base.x + dx, base.y + dy, base.z + dz);
+        currentPositions.set(id, cur);
+
+        mesh.position.copy(cur);
+        auraMesh.position.copy(cur);
+        label.position.set(cur.x, cur.y + 2.7, cur.z);
+
+        // Breathing aura pulse
+        const auraPulse = 1.0 + Math.sin(clock * 3.0 + id) * 0.12;
+        auraMesh.scale.set(auraPulse, auraPulse, auraPulse);
       });
 
-      // Animate spinning candidate rings
-      if (candidateRingsGroupRef.current) {
-        candidateRingsGroupRef.current.children.forEach((child) => {
-          child.rotation.z += 0.025;
-          const s = 1 + Math.sin(clock * 4) * 0.08;
-          child.scale.set(s, s, s);
-        });
+      // Update Base Similarity Lines to follow floating nodes
+      if (baseLinesAttrRef.current) {
+        const attr = baseLinesAttrRef.current;
+        for (let eIdx = 0; eIdx < edges.length; eIdx++) {
+          const e = edges[eIdx];
+          const p1 = currentPositions.get(e.source);
+          const p2 = currentPositions.get(e.target);
+          if (p1 && p2) {
+            const idx = eIdx * 6;
+            attr.array[idx] = p1.x;
+            attr.array[idx + 1] = p1.y;
+            attr.array[idx + 2] = p1.z;
+            attr.array[idx + 3] = p2.x;
+            attr.array[idx + 4] = p2.y;
+            attr.array[idx + 5] = p2.z;
+          }
+        }
+        attr.needsUpdate = true;
       }
+
+      // Update Traversal Laser Cylinders & Auras to track moving nodes
+      traversalMeshesRef.current.forEach(({ mesh, auraMesh, source, target }) => {
+        const p1 = currentPositions.get(source);
+        const p2 = currentPositions.get(target);
+        if (!p1 || !p2) return;
+
+        const dir = new THREE.Vector3().subVectors(p2, p1);
+        const len = dir.length();
+        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+
+        mesh.position.copy(mid);
+        mesh.scale.set(1, len, 1);
+        mesh.quaternion.setFromUnitVectors(upVector, dir.clone().normalize());
+
+        auraMesh.position.copy(mid);
+        auraMesh.scale.set(1, len, 1);
+        auraMesh.quaternion.copy(mesh.quaternion);
+      });
+
+      // Animate Fast Flowing Photons along traversal beams
+      photonsRef.current.forEach((ph) => {
+        const p1 = currentPositions.get(ph.source);
+        const p2 = currentPositions.get(ph.target);
+        if (!p1 || !p2) return;
+        const t = (clock * 1.1 + ph.offset) % 1;
+        ph.mesh.position.lerpVectors(p1, p2, t);
+      });
+
+      // Animate Spinning Dual-Axis Gyro-Rings around active candidate nodes
+      candidateRingsDataRef.current.forEach(({ group, nodeId }) => {
+        const pos = currentPositions.get(nodeId);
+        if (pos) group.position.copy(pos);
+
+        group.rotation.x += 0.025;
+        group.rotation.y += 0.035;
+        group.rotation.z += 0.015;
+
+        const s = 1.0 + Math.sin(clock * 4.0 + nodeId) * 0.1;
+        group.scale.set(s, s, s);
+      });
 
       controls.update();
       renderer.render(scene, camera);
@@ -375,10 +518,10 @@ export default function ReasoningGraph3D({
     };
   }, [graphData.nodes, graphData.edges, height]);
 
-  // Update node visual properties, 3D Traversal Lasers, and Candidate Rings smoothly in-place
+  // Update Node Styles, High-Energy Traversal Lasers, and Gyro Rings dynamically
   useEffect(() => {
-    // 1. Update node meshes
-    nodeMeshesRef.current.forEach(({ mesh }, id) => {
+    // 1. Update node meshes with radiant glowing colors
+    nodeMeshesRef.current.forEach(({ mesh, auraMesh }, id) => {
       const isSup = supportingIndices.has(id);
       const isTrav = traversedSet.has(id);
       const isPrune = prunedSet.has(id);
@@ -386,48 +529,65 @@ export default function ReasoningGraph3D({
       const isCand = activeCandidateSet.has(id);
 
       let color = 0x00f0ff;
-      let emissive = 0x004455;
+      let emissive = 0x006688;
+      let auraColor = 0x00f0ff;
+      let emissiveIntensity = 2.0;
       let scale = 1.0;
-      let opacity = 0.9;
+      let auraOpacity = 0.25;
 
       if (isSup) {
-        color = 0x10b981; // emerald
-        emissive = 0x047857;
-        scale = 1.45;
-        opacity = 1.0;
-      } else if (isTrav) {
-        color = 0xa855f7; // violet
-        emissive = 0x6b21a8;
-        scale = 1.25;
-        opacity = 1.0;
-      } else if (isKept) {
-        color = 0x34d399; // bright emerald
+        color = 0x10b981; // bright emerald
         emissive = 0x059669;
-        scale = 1.2;
-        opacity = 1.0;
-      } else if (isPrune) {
-        color = 0xf43f5e; // ruby
-        emissive = 0x440000;
-        scale = 0.75;
-        opacity = 0.25;
+        auraColor = 0x34d399;
+        emissiveIntensity = 3.2;
+        scale = 1.45;
+        auraOpacity = 0.45;
+      } else if (isTrav) {
+        color = 0xc084fc; // radiant violet
+        emissive = 0xa855f7;
+        auraColor = 0xc084fc;
+        emissiveIntensity = 3.0;
+        scale = 1.3;
+        auraOpacity = 0.4;
+      } else if (isKept) {
+        color = 0x2dd4bf; // vivid teal
+        emissive = 0x0d9488;
+        auraColor = 0x2dd4bf;
+        emissiveIntensity = 2.8;
+        scale = 1.25;
+        auraOpacity = 0.35;
       } else if (isCand) {
         color = 0x00f0ff; // electric cyan
         emissive = 0x0284c7;
-        scale = 1.2;
-        opacity = 1.0;
+        auraColor = 0x00f0ff;
+        emissiveIntensity = 2.8;
+        scale = 1.25;
+        auraOpacity = 0.4;
+      } else if (isPrune) {
+        color = 0xf43f5e; // ruby rose
+        emissive = 0x4c0519;
+        auraColor = 0xf43f5e;
+        emissiveIntensity = 0.8;
+        scale = 0.8;
+        auraOpacity = 0.12;
       }
 
       if (mesh.material instanceof THREE.MeshStandardMaterial) {
         mesh.material.color.setHex(color);
         mesh.material.emissive.setHex(emissive);
-        mesh.material.opacity = opacity;
-        mesh.material.transparent = opacity < 1.0;
+        mesh.material.emissiveIntensity = emissiveIntensity;
         mesh.material.needsUpdate = true;
       }
       mesh.scale.set(scale, scale, scale);
+
+      if (auraMesh.material instanceof THREE.MeshBasicMaterial) {
+        auraMesh.material.color.setHex(auraColor);
+        auraMesh.material.opacity = auraOpacity;
+        auraMesh.material.needsUpdate = true;
+      }
     });
 
-    // 2. Build 3D Traversal Lasers & Photons
+    // 2. Build 3D Traversal Lasers, Glowing Aura Cylinders & Photons
     const traversalGroup = traversalGroupRef.current;
     const nodePositions = nodePositionsRef.current;
     if (traversalGroup && nodePositions.size > 0) {
@@ -440,9 +600,10 @@ export default function ReasoningGraph3D({
           else obj.material?.dispose();
         }
       }
+      traversalMeshesRef.current = [];
       photonsRef.current = [];
 
-      // Collect traversal edges
+      // Collect traversal edges from playback frame or accumulated hops
       const activeTraversalEdges: Array<{ source: number; target: number }> = [];
       if (playbackFrame?.traversalEdges && playbackFrame.traversalEdges.length > 0) {
         activeTraversalEdges.push(...playbackFrame.traversalEdges);
@@ -453,6 +614,8 @@ export default function ReasoningGraph3D({
         }
       }
 
+      const upVector = new THREE.Vector3(0, 1, 0);
+
       activeTraversalEdges.forEach((edge) => {
         const p1 = nodePositions.get(edge.source);
         const p2 = nodePositions.get(edge.target);
@@ -462,72 +625,115 @@ export default function ReasoningGraph3D({
         const len = dir.length();
         const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
 
-        // High-energy glowing neon cylinder
-        const cylGeo = new THREE.CylinderGeometry(0.22, 0.22, len, 16);
+        // Core Glowing Solid Laser Cylinder (Unit height 1, scaled dynamically)
+        const cylGeo = new THREE.CylinderGeometry(0.24, 0.24, 1, 16);
         const cylMat = new THREE.MeshStandardMaterial({
           color: 0xc084fc,
           emissive: 0xa855f7,
-          emissiveIntensity: 2.8,
+          emissiveIntensity: 3.5,
           roughness: 0.1,
-          metalness: 0.8,
+          metalness: 0.9,
         });
         const cylMesh = new THREE.Mesh(cylGeo, cylMat);
         cylMesh.position.copy(mid);
-        cylMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        cylMesh.scale.set(1, len, 1);
+        cylMesh.quaternion.setFromUnitVectors(upVector, dir.clone().normalize());
         traversalGroup.add(cylMesh);
 
-        // Outer translucent laser aura cylinder
-        const auraGeo = new THREE.CylinderGeometry(0.55, 0.55, len, 16);
+        // Outer Translucent Plasma Aura Cylinder
+        const auraGeo = new THREE.CylinderGeometry(0.65, 0.65, 1, 16);
         const auraMat = new THREE.MeshBasicMaterial({
           color: 0xa855f7,
           transparent: true,
-          opacity: 0.25,
+          opacity: 0.35,
+          blending: THREE.AdditiveBlending,
         });
         const auraMesh = new THREE.Mesh(auraGeo, auraMat);
         auraMesh.position.copy(mid);
-        auraMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        auraMesh.scale.set(1, len, 1);
+        auraMesh.quaternion.copy(cylMesh.quaternion);
         traversalGroup.add(auraMesh);
 
-        // Flowing glowing photon spheres
+        traversalMeshesRef.current.push({
+          mesh: cylMesh,
+          auraMesh,
+          source: edge.source,
+          target: edge.target,
+        });
+
+        // Fast Flowing White Photon Energy Orbs
         for (let k = 0; k < 2; k++) {
-          const phGeo = new THREE.SphereGeometry(0.4, 16, 16);
-          const phMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          const phGeo = new THREE.SphereGeometry(0.45, 16, 16);
+          const phMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            blending: THREE.AdditiveBlending,
+          });
           const phMesh = new THREE.Mesh(phGeo, phMat);
           phMesh.position.copy(p1);
           traversalGroup.add(phMesh);
-          photonsRef.current.push({ p1, p2, mesh: phMesh, offset: k * 0.5 });
+          photonsRef.current.push({
+            source: edge.source,
+            target: edge.target,
+            mesh: phMesh,
+            offset: k * 0.5,
+          });
         }
       });
     }
 
-    // 3. Build Candidate Orbit Torus Rings
+    // 3. Build Gyroscopic Containment Rings for Candidate & Traversed Nodes
     const candidateGroup = candidateRingsGroupRef.current;
     if (candidateGroup && nodePositions.size > 0) {
       while (candidateGroup.children.length > 0) {
         const obj = candidateGroup.children[0];
         candidateGroup.remove(obj);
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry?.dispose();
-          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
-          else obj.material?.dispose();
-        }
       }
+      candidateRingsDataRef.current = [];
 
-      activeCandidateSet.forEach((candId) => {
-        const pos = nodePositions.get(candId);
+      // Determine which nodes deserve gyroscopic rings
+      const ringNodeIds = new Set<number>([
+        ...Array.from(activeCandidateSet),
+        ...Array.from(traversedSet),
+        ...Array.from(supportingIndices),
+      ]);
+
+      ringNodeIds.forEach((nodeId) => {
+        const pos = nodePositions.get(nodeId);
         if (!pos) return;
 
-        const ringGeo = new THREE.TorusGeometry(2.3, 0.08, 12, 32);
-        const ringMat = new THREE.MeshStandardMaterial({
-          color: 0x00f0ff,
-          emissive: 0x00f0ff,
-          emissiveIntensity: 2.5,
-          roughness: 0.2,
+        const isSup = supportingIndices.has(nodeId);
+        const isTrav = traversedSet.has(nodeId);
+
+        const ringColor = isSup ? 0x10b981 : isTrav ? 0xc084fc : 0x00f0ff;
+        const ringGroup = new THREE.Group();
+        ringGroup.position.copy(pos);
+
+        // Primary Equatorial Ring
+        const ring1Geo = new THREE.TorusGeometry(2.4, 0.08, 12, 32);
+        const ring1Mat = new THREE.MeshStandardMaterial({
+          color: ringColor,
+          emissive: ringColor,
+          emissiveIntensity: 2.8,
+          roughness: 0.15,
         });
-        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-        ringMesh.position.copy(pos);
-        ringMesh.rotation.x = Math.PI / 2;
-        candidateGroup.add(ringMesh);
+        const ring1Mesh = new THREE.Mesh(ring1Geo, ring1Mat);
+        ring1Mesh.rotation.x = Math.PI / 2;
+        ringGroup.add(ring1Mesh);
+
+        // Secondary Polar Gyro-Ring
+        const ring2Geo = new THREE.TorusGeometry(2.7, 0.06, 12, 32);
+        const ring2Mat = new THREE.MeshStandardMaterial({
+          color: ringColor,
+          emissive: ringColor,
+          emissiveIntensity: 2.0,
+          roughness: 0.15,
+        });
+        const ring2Mesh = new THREE.Mesh(ring2Geo, ring2Mat);
+        ring2Mesh.rotation.y = Math.PI / 4;
+        ringGroup.add(ring2Mesh);
+
+        candidateGroup.add(ringGroup);
+        candidateRingsDataRef.current.push({ group: ringGroup, nodeId });
       });
     }
   }, [traversedSet, prunedSet, supportingIndices, keptSet, activeCandidateSet, playbackFrame]);
@@ -550,7 +756,7 @@ export default function ReasoningGraph3D({
   }
 
   return (
-    <div className="relative w-full overflow-hidden rounded-3xl border border-purple-500/20 bg-[#030508] shadow-2xl">
+    <div className="relative w-full overflow-hidden rounded-3xl border border-purple-500/20 bg-[#020409] shadow-2xl">
       {/* Top HUD Controls */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
         <div className="flex items-center gap-2 pointer-events-auto">
@@ -559,7 +765,7 @@ export default function ReasoningGraph3D({
             3D Knowledge Nebula (Three.js)
           </span>
           <span className="rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[11px] font-mono text-slate-400">
-            WebGL Spatial Orbit
+            Zero-Gravity Orbit
           </span>
         </div>
 
@@ -590,11 +796,11 @@ export default function ReasoningGraph3D({
           <span className="flex items-center gap-1.5 text-purple-400">
             <span className="h-2 w-2 rounded-full bg-purple-400" /> Traversed Path
           </span>
+          <span className="flex items-center gap-1.5 text-cyan-400">
+            <span className="h-2 w-2 rounded-full bg-cyan-400" /> Active Candidate
+          </span>
           <span className="flex items-center gap-1.5 text-rose-400">
             <span className="h-2 w-2 rounded-full bg-rose-400" /> IsREL Pruned
-          </span>
-          <span className="flex items-center gap-1.5 text-cyan-400">
-            <span className="h-2 w-2 rounded-full bg-cyan-400" /> Candidate
           </span>
         </div>
 

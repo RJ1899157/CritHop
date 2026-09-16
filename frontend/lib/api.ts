@@ -24,6 +24,7 @@ export type QueryResult = {
   answer: string;
   hop_trace: Array<Record<string, unknown>>;
   graph?: GraphData;
+  graph_data?: GraphData;
   critique_log: {
     isrel_decisions: boolean[];
     issup_decisions: boolean[];

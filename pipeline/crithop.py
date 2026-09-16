@@ -125,12 +125,19 @@ class CritHop:
             serializable_graph = _extract_graph_data(graph_dict)
 
             self.bm25 = BM25Retriever(context_passages)
-            self.bge = BGERetriever(
-                context_passages,
-                self.config.get("embedding_model", "BAAI/bge-base-en-v1.5"),
-                self.config.get("embedding_device", "cpu"),
-                embeddings=getattr(self.graph, "embeddings", None),
-            )
+            try:
+                self.bge = BGERetriever(
+                    context_passages,
+                    self.config.get("embedding_model", "BAAI/bge-base-en-v1.5"),
+                    self.config.get("embedding_device", "cpu"),
+                    embeddings=getattr(self.graph, "embeddings", None),
+                )
+            except TypeError:
+                self.bge = BGERetriever(
+                    context_passages,
+                    self.config.get("embedding_model", "BAAI/bge-base-en-v1.5"),
+                    self.config.get("embedding_device", "cpu"),
+                )
             self.hybrid = HybridRetriever(self.bm25, self.bge)
 
             top_k = int(self.config.get("top_k_retrieval", 10))
@@ -138,13 +145,21 @@ class CritHop:
             print(f"HybridRetriever returned {len(initial_results)} passages")
             start_passages = [index for index, _ in initial_results]
 
-            self.traverser = HopTraverser(
-                graph=self.graph,
-                config=self.config,
-                groq_client=self.groq_client,
-                isrel=self.isrel,
-                reranker=self.reranker,
-            )
+            try:
+                self.traverser = HopTraverser(
+                    graph=self.graph,
+                    config=self.config,
+                    groq_client=self.groq_client,
+                    isrel=self.isrel,
+                    reranker=self.reranker,
+                )
+            except TypeError:
+                self.traverser = HopTraverser(
+                    graph=self.graph,
+                    config=self.config,
+                    groq_client=self.groq_client,
+                    isrel=self.isrel,
+                )
             traversed_passages = self.traverser.traverse(
                 question,
                 start_passages,

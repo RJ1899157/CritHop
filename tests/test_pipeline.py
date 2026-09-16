@@ -29,7 +29,7 @@ class FakeBM25:
 
 
 class FakeBGE:
-    def __init__(self, passages, model_name, device="cpu"):
+    def __init__(self, passages, model_name, device="cpu", *args, **kwargs):
         self.passages = passages
 
 
@@ -42,7 +42,7 @@ class FakeHybrid:
 
 
 class FakeTraverser:
-    def __init__(self, graph, config, groq_client, isrel):
+    def __init__(self, graph, config, groq_client, isrel, *args, **kwargs):
         self.hop_log = [{
             "hop": 1,
             "passages_considered": [0],
@@ -95,6 +95,7 @@ def test_crithop_run_returns_required_structure(monkeypatch, tmp_path):
         "critique_log",
         "supporting_passages",
         "retrieval_retry",
+        "graph",
     }
     assert result["question"] == "What nationality?"
     assert isinstance(result["answer"], str)
