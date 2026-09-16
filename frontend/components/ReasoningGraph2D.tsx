@@ -107,7 +107,7 @@ export default function ReasoningGraph2D({
     };
   }, [hopTrace, supportingPassages, graphData.nodes, playbackFrame]);
 
-  // Build simulation nodes
+  // Build simulation nodes only when graph topology changes
   useEffect(() => {
     const width = canvasRef.current?.parentElement?.clientWidth || 800;
     const heightLocal = height;
@@ -122,12 +122,38 @@ export default function ReasoningGraph2D({
       const initialY = heightLocal / 2 + radius * Math.sin(angle) + (Math.random() - 0.5) * 40;
 
       const prev = existingMap.get(n.id);
-      const isSup = supportingIndices.has(n.id);
-      const isTrav = traversedSet.has(n.id);
-      const isPrune = prunedSet.has(n.id);
-      const isKept = keptSet.has(n.id);
-      const isCand = activeCandidateSet.has(n.id);
-      const hopNum = hopMap.get(n.id) ?? null;
+      return {
+        ...n,
+        x: prev ? prev.x : initialX,
+        y: prev ? prev.y : initialY,
+        vx: prev ? prev.vx : 0,
+        vy: prev ? prev.vy : 0,
+        radius: prev ? prev.radius : 18,
+        color: prev ? prev.color : "#00f0ff",
+        glowColor: prev ? prev.glowColor : "rgba(0, 240, 255, 0.5)",
+        isSupporting: false,
+        isTraversed: false,
+        isPruned: false,
+        isKept: false,
+        isCandidate: true,
+        hopNumber: null,
+      };
+    });
+
+    nodesRef.current = simNodes;
+  }, [graphData.nodes, height]);
+
+  // Update visual styles on existing nodes smoothly in-place without touching physics positions
+  useEffect(() => {
+    if (nodesRef.current.length === 0) return;
+
+    nodesRef.current.forEach((node) => {
+      const isSup = supportingIndices.has(node.id);
+      const isTrav = traversedSet.has(node.id);
+      const isPrune = prunedSet.has(node.id);
+      const isKept = keptSet.has(node.id);
+      const isCand = activeCandidateSet.has(node.id);
+      const hopNum = hopMap.get(node.id) ?? null;
 
       let color = "#64748b"; // neutral slate
       let glowColor = "rgba(100, 116, 139, 0.3)";
@@ -155,26 +181,17 @@ export default function ReasoningGraph2D({
         nodeRadius = 18;
       }
 
-      return {
-        ...n,
-        x: prev ? prev.x : initialX,
-        y: prev ? prev.y : initialY,
-        vx: prev ? prev.vx : 0,
-        vy: prev ? prev.vy : 0,
-        radius: nodeRadius,
-        color,
-        glowColor,
-        isSupporting: isSup,
-        isTraversed: isTrav,
-        isPruned: isPrune,
-        isKept,
-        isCandidate: isCand,
-        hopNumber: hopNum,
-      };
+      node.color = color;
+      node.glowColor = glowColor;
+      node.radius = nodeRadius;
+      node.isSupporting = isSup;
+      node.isTraversed = isTrav;
+      node.isPruned = isPrune;
+      node.isKept = isKept;
+      node.isCandidate = isCand;
+      node.hopNumber = hopNum;
     });
-
-    nodesRef.current = simNodes;
-  }, [graphData.nodes, supportingIndices, traversedSet, prunedSet, hopMap, height]);
+  }, [supportingIndices, traversedSet, prunedSet, keptSet, activeCandidateSet, hopMap, playbackFrame]);
 
   // Main Canvas Simulation & Render Loop
   useEffect(() => {

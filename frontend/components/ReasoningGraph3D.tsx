@@ -21,14 +21,23 @@ export default function ReasoningGraph3D({
   supportingPassages = [],
   playbackFrame,
   onSelectNode,
-  height = 540,
+  height = 500,
 }: ReasoningGraph3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const nodeMeshesRef = useRef<Map<number, { mesh: THREE.Mesh; label: THREE.Sprite }>>(new Map());
+  const onSelectNodeRef = useRef(onSelectNode);
+
   const [autoRotate, setAutoRotate] = useState(true);
   const [selectedNodeTitle, setSelectedNodeTitle] = useState<string | null>(null);
+  const [webglError, setWebglError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onSelectNodeRef.current = onSelectNode;
+  }, [onSelectNode]);
 
   // Classify nodes
-  const { traversedSet, prunedSet, hopMap, supportingIndices, keptSet } = useMemo(() => {
+  const { traversedSet, prunedSet, hopMap, supportingIndices, keptSet, activeCandidateSet } = useMemo(() => {
     if (playbackFrame) {
       return {
         traversedSet: new Set<number>(playbackFrame.traversedNodeIds),
@@ -36,6 +45,7 @@ export default function ReasoningGraph3D({
         hopMap: new Map<number, number>(),
         supportingIndices: new Set<number>(playbackFrame.supportingNodeIds),
         keptSet: new Set<number>(playbackFrame.keptNodeIds),
+        activeCandidateSet: new Set<number>(playbackFrame.activeCandidateIds),
       };
     }
 
@@ -75,9 +85,18 @@ export default function ReasoningGraph3D({
       hopMap: hopM,
       supportingIndices: supIndices,
       keptSet: new Set<number>(),
+      activeCandidateSet: new Set<number>(),
     };
   }, [hopTrace, supportingPassages, graphData.nodes, playbackFrame]);
 
+  // Sync autoRotate state with controlsRef
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.autoRotate = autoRotate;
+    }
+  }, [autoRotate]);
+
+  // Initialize Three.js Scene ONCE on mount or when graph topology changes
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -93,9 +112,17 @@ export default function ReasoningGraph3D({
     const camera = new THREE.PerspectiveCamera(50, width / h, 0.1, 1000);
     camera.position.set(0, 15, 38);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch (err) {
+      setWebglError(err instanceof Error ? err.message : "WebGL context not available");
+      return;
+    }
+
     renderer.setSize(width, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.innerHTML = "";
     container.appendChild(renderer.domElement);
 
     // 2. Orbit Controls
@@ -104,22 +131,23 @@ export default function ReasoningGraph3D({
     controls.dampingFactor = 0.05;
     controls.autoRotate = autoRotate;
     controls.autoRotateSpeed = 0.8;
-    controls.maxDistance = 80;
-    controls.minDistance = 10;
+    controls.maxDistance = 85;
+    controls.minDistance = 8;
+    controlsRef.current = controls;
 
     // 3. Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambientLight);
 
-    const cyanLight = new THREE.PointLight(0x00f0ff, 2.5, 60);
+    const cyanLight = new THREE.PointLight(0x00f0ff, 2.5, 70);
     cyanLight.position.set(20, 20, 20);
     scene.add(cyanLight);
 
-    const purpleLight = new THREE.PointLight(0xa855f7, 2.5, 60);
+    const purpleLight = new THREE.PointLight(0xa855f7, 2.5, 70);
     purpleLight.position.set(-20, -15, -20);
     scene.add(purpleLight);
 
-    // 4. Background Star/Cosmic Dust Particles
+    // 4. Background Star / Cosmic Dust Particles
     const particleCount = 450;
     const particleGeo = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
@@ -138,12 +166,6 @@ export default function ReasoningGraph3D({
     const starField = new THREE.Points(particleGeo, particleMat);
     scene.add(starField);
 
-    // 5. Position Nodes on an 3D Ellipsoid
-    const nodes = graphData.nodes;
-    const nodeCount = nodes.length || 1;
-    const nodeObjects: THREE.Mesh[] = [];
-    const nodePositions = new Map<number, THREE.Vector3>();
-
     // Helper to create text sprite
     function createTextSprite(text: string, color: string): THREE.Sprite {
       const canvas = document.createElement("canvas");
@@ -151,7 +173,7 @@ export default function ReasoningGraph3D({
       canvas.height = 64;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.fillStyle = "rgba(4, 6, 12, 0.75)";
+        ctx.fillStyle = "rgba(4, 6, 12, 0.8)";
         ctx.roundRect(4, 4, 248, 56, 12);
         ctx.fill();
         ctx.strokeStyle = color;
@@ -165,17 +187,24 @@ export default function ReasoningGraph3D({
         ctx.fillText(text, 128, 32);
       }
       const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
       const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
       const sprite = new THREE.Sprite(spriteMat);
-      sprite.scale.set(4, 1, 1);
+      sprite.scale.set(7, 1.8, 1);
       return sprite;
     }
 
+    // 5. Position Nodes on an 3D Ellipsoid
+    const nodes = graphData.nodes;
+    const nodeCount = nodes.length || 1;
+    const nodeObjects: THREE.Mesh[] = [];
+    const nodePositions = new Map<number, THREE.Vector3>();
+    const nodeMap = new Map<number, { mesh: THREE.Mesh; label: THREE.Sprite }>();
+
     nodes.forEach((n, i) => {
-      // Golden spiral distribution on sphere
-      const phi = Math.acos(1 - (2 * (i + 0.5)) / nodeCount);
-      const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
-      const radius = 13 + (i % 3) * 1.5;
+      const phi = Math.acos(-1 + (2 * i) / nodeCount);
+      const theta = Math.sqrt(nodeCount * Math.PI) * phi;
+      const radius = 13.5;
 
       const pos = new THREE.Vector3(
         radius * Math.sin(phi) * Math.cos(theta),
@@ -184,41 +213,15 @@ export default function ReasoningGraph3D({
       );
       nodePositions.set(n.id, pos);
 
-      const isSup = supportingIndices.has(n.id);
-      const isTrav = traversedSet.has(n.id);
-      const isPrune = prunedSet.has(n.id);
-
-      let sphereRadius = 1.2;
-      let nodeColor = 0x00f0ff;
-      let emissiveColor = 0x005566;
-      let labelColor = "#00f0ff";
-
-      if (isSup) {
-        sphereRadius = 1.8;
-        nodeColor = 0x10b981;
-        emissiveColor = 0x047857;
-        labelColor = "#10b981";
-      } else if (isTrav) {
-        sphereRadius = 1.5;
-        nodeColor = 0xa855f7;
-        emissiveColor = 0x6b21a8;
-        labelColor = "#c084fc";
-      } else if (isPrune) {
-        sphereRadius = 0.9;
-        nodeColor = 0xf43f5e;
-        emissiveColor = 0x881337;
-        labelColor = "#f87171";
-      }
-
-      const sphereGeo = new THREE.SphereGeometry(sphereRadius, 24, 24);
+      const sphereGeo = new THREE.SphereGeometry(1.4, 24, 24);
       const sphereMat = new THREE.MeshStandardMaterial({
-        color: nodeColor,
-        emissive: emissiveColor,
+        color: 0x00f0ff,
+        emissive: 0x004455,
         emissiveIntensity: 0.8,
         roughness: 0.2,
         metalness: 0.3,
-        transparent: isPrune,
-        opacity: isPrune ? 0.45 : 1.0,
+        transparent: false,
+        opacity: 1.0,
       });
 
       const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
@@ -227,12 +230,15 @@ export default function ReasoningGraph3D({
       scene.add(sphereMesh);
       nodeObjects.push(sphereMesh);
 
-      // Label sprite
       const truncatedTitle = n.title.length > 14 ? `${n.title.slice(0, 12)}…` : n.title;
-      const sprite = createTextSprite(`#${n.id} ${truncatedTitle}`, labelColor);
-      sprite.position.set(pos.x, pos.y + sphereRadius + 1.2, pos.z);
+      const sprite = createTextSprite(`#${n.id} ${truncatedTitle}`, "#00f0ff");
+      sprite.position.set(pos.x, pos.y + 2.5, pos.z);
       scene.add(sprite);
+
+      nodeMap.set(n.id, { mesh: sphereMesh, label: sprite });
     });
+
+    nodeMeshesRef.current = nodeMap;
 
     // 6. Connect Edges
     const edges = graphData.edges;
@@ -245,17 +251,7 @@ export default function ReasoningGraph3D({
       if (!p1 || !p2) return;
 
       edgeLinePositions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-
-      const isBothTrav = traversedSet.has(edge.source) && traversedSet.has(edge.target);
-      const isBothSup = supportingIndices.has(edge.source) && supportingIndices.has(edge.target);
-
-      if (isBothSup) {
-        edgeColors.push(0.06, 0.72, 0.5, 0.06, 0.72, 0.5);
-      } else if (isBothTrav) {
-        edgeColors.push(0.65, 0.33, 0.96, 0.65, 0.33, 0.96);
-      } else {
-        edgeColors.push(0.0, 0.6, 0.7, 0.0, 0.6, 0.7);
-      }
+      edgeColors.push(0.0, 0.6, 0.7, 0.0, 0.6, 0.7);
     });
 
     if (edgeLinePositions.length > 0) {
@@ -290,7 +286,7 @@ export default function ReasoningGraph3D({
         const targetNode = clickedMesh.userData.node as GraphNode;
         if (targetNode) {
           setSelectedNodeTitle(targetNode.title);
-          onSelectNode?.(targetNode);
+          onSelectNodeRef.current?.(targetNode);
         }
       }
     }
@@ -310,9 +306,9 @@ export default function ReasoningGraph3D({
     function handleResize() {
       if (!container) return;
       const w = container.clientWidth;
-      camera.aspect = w / height;
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, height);
+      renderer.setSize(w, h);
     }
     window.addEventListener("resize", handleResize);
 
@@ -326,7 +322,72 @@ export default function ReasoningGraph3D({
         container.removeChild(renderer.domElement);
       }
     };
-  }, [graphData, traversedSet, prunedSet, supportingIndices, autoRotate, height, onSelectNode]);
+  }, [graphData.nodes, graphData.edges, height]);
+
+  // Update node colors & properties smoothly in-place without rebuilding scene
+  useEffect(() => {
+    nodeMeshesRef.current.forEach(({ mesh }, id) => {
+      const isSup = supportingIndices.has(id);
+      const isTrav = traversedSet.has(id);
+      const isPrune = prunedSet.has(id);
+      const isKept = keptSet.has(id);
+      const isCand = activeCandidateSet.has(id);
+
+      let color = 0x00f0ff;
+      let emissive = 0x004455;
+      let scale = 1.0;
+      let opacity = 1.0;
+
+      if (isSup) {
+        color = 0x10b981; // emerald
+        emissive = 0x047857;
+        scale = 1.35;
+      } else if (isTrav) {
+        color = 0xa855f7; // violet
+        emissive = 0x6b21a8;
+        scale = 1.15;
+      } else if (isKept) {
+        color = 0x34d399; // bright emerald
+        emissive = 0x059669;
+        scale = 1.15;
+      } else if (isPrune) {
+        color = 0xf43f5e; // ruby
+        emissive = 0x881337;
+        scale = 0.8;
+        opacity = 0.4;
+      } else if (isCand) {
+        color = 0x38bdf8;
+        emissive = 0x0284c7;
+        scale = 1.1;
+      }
+
+      if (mesh.material instanceof THREE.MeshStandardMaterial) {
+        mesh.material.color.setHex(color);
+        mesh.material.emissive.setHex(emissive);
+        mesh.material.opacity = opacity;
+        mesh.material.transparent = opacity < 1.0;
+        mesh.material.needsUpdate = true;
+      }
+      mesh.scale.set(scale, scale, scale);
+    });
+  }, [traversedSet, prunedSet, supportingIndices, keptSet, activeCandidateSet]);
+
+  if (webglError) {
+    return (
+      <div
+        className="relative w-full flex flex-col items-center justify-center p-8 rounded-3xl border border-purple-500/20 bg-[#030508] shadow-2xl text-center space-y-3"
+        style={{ height }}
+      >
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-400 font-mono text-xl">
+          🌌
+        </div>
+        <h4 className="text-base font-bold text-white">WebGL Hardware Acceleration Unavailable</h4>
+        <p className="max-w-md text-xs text-slate-400 leading-relaxed">
+          Your current browser environment has WebGL disabled or lacks hardware acceleration. Please switch to the ⚡ 2D Force Physics view above for full interactive knowledge graph simulation.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full overflow-hidden rounded-3xl border border-purple-500/20 bg-[#030508] shadow-2xl">
@@ -363,27 +424,26 @@ export default function ReasoningGraph3D({
       {/* Bottom HUD Legend */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 p-4 bg-gradient-to-t from-black/90 to-transparent text-[11px] font-mono text-slate-400">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            <span className="text-slate-200">Supporting Node</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-purple-400" />
-            <span className="text-slate-200">Traversed Hop</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-rose-400 opacity-60" />
-            <span className="text-slate-200">Pruned Node</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
-            <span className="text-slate-200">Candidate</span>
-          </div>
+          <span className="flex items-center gap-1.5 text-emerald-400">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" /> Supporting
+          </span>
+          <span className="flex items-center gap-1.5 text-purple-400">
+            <span className="h-2 w-2 rounded-full bg-purple-400" /> Traversed Path
+          </span>
+          <span className="flex items-center gap-1.5 text-rose-400">
+            <span className="h-2 w-2 rounded-full bg-rose-400" /> IsREL Pruned
+          </span>
+          <span className="flex items-center gap-1.5 text-cyan-400">
+            <span className="h-2 w-2 rounded-full bg-cyan-400" /> Candidate
+          </span>
         </div>
 
-        <div className="text-slate-400">
-          Left Click + Drag to rotate · Right Click to pan · Scroll to zoom
-        </div>
+        {selectedNodeTitle && (
+          <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-cyan-400/40 bg-black/80 px-2.5 py-1 text-cyan-300">
+            <span>Selected:</span>
+            <span className="font-bold text-white max-w-[200px] truncate">{selectedNodeTitle}</span>
+          </div>
+        )}
       </div>
     </div>
   );

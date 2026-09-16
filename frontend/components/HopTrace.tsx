@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import ReasoningGraph2D from "./ReasoningGraph2D";
 import ReasoningGraph3D from "./ReasoningGraph3D";
@@ -21,7 +21,7 @@ type HopTraceProps = {
   retrievalRetry?: boolean;
 };
 
-type ViewMode = "playback" | "3d" | "steps" | "telemetry";
+type ViewMode = "studio" | "steps" | "telemetry";
 
 export default function HopTrace({
   hopTrace = [],
@@ -30,7 +30,8 @@ export default function HopTrace({
   critiqueLog,
   retrievalRetry = false,
 }: HopTraceProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("playback");
+  const [viewMode, setViewMode] = useState<ViewMode>("studio");
+  const [graphDimension, setGraphDimension] = useState<"2d" | "3d">("2d");
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [activeFrame, setActiveFrame] = useState<PlaybackFrame | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -38,56 +39,72 @@ export default function HopTrace({
 
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("dim") === "3d") {
+        setGraphDimension("3d");
+      }
+      const tabParam = params.get("tab");
+      if (tabParam === "steps" || tabParam === "telemetry" || tabParam === "studio") {
+        setViewMode(tabParam as ViewMode);
+      }
+    }
   }, []);
 
-  // Synthesize fallback graph if backend hasn't provided graphData
-  const activeGraphData: GraphData = graphData && graphData.nodes?.length > 0
-    ? graphData
-    : (() => {
-        const nodes: GraphNode[] = [];
-        const edges: Array<{ source: number; target: number; weight?: number }> = [];
-        const seenIndices = new Set<number>();
+  // Stabilize frame change notification callback
+  const handleFrameChange = useCallback((frame: PlaybackFrame) => {
+    setActiveFrame((prev) => (prev?.stepIndex === frame.stepIndex ? prev : frame));
+  }, []);
 
-        hopTrace.forEach((hop) => {
-          const considered = Array.isArray(hop.passages_considered) ? hop.passages_considered : [];
-          considered.forEach((idx) => {
-            const num = Number(idx);
-            if (!seenIndices.has(num)) {
-              seenIndices.add(num);
-              nodes.push({
-                id: num,
-                title: `Evidence Passage #${num}`,
-                snippet: `Passage index ${num} considered during multi-hop traversal.`,
-                text: `Full text for passage #${num} evaluated by the CritHop pipeline.`,
-              });
-            }
+  // Memoize active graph data to avoid recreating objects on each render
+  const activeGraphData: GraphData = useMemo(() => {
+    if (graphData && graphData.nodes?.length > 0) {
+      return graphData;
+    }
+    const nodes: GraphNode[] = [];
+    const edges: Array<{ source: number; target: number; weight?: number }> = [];
+    const seenIndices = new Set<number>();
+
+    hopTrace.forEach((hop) => {
+      const considered = Array.isArray(hop.passages_considered) ? hop.passages_considered : [];
+      considered.forEach((idx) => {
+        const num = Number(idx);
+        if (!seenIndices.has(num)) {
+          seenIndices.add(num);
+          nodes.push({
+            id: num,
+            title: `Evidence Passage #${num}`,
+            snippet: `Passage index ${num} considered during multi-hop traversal.`,
+            text: `Full text for passage #${num} evaluated by the CritHop pipeline.`,
           });
-        });
-
-        // Add supporting passages if missing
-        supportingPassages.forEach((sp, i) => {
-          if (!seenIndices.has(i)) {
-            seenIndices.add(i);
-            const title = sp.includes(":") ? sp.split(":")[0].trim() : `Supporting #${i}`;
-            nodes.push({
-              id: i,
-              title,
-              snippet: sp.slice(0, 120),
-              text: sp,
-            });
-          }
-        });
-
-        for (let i = 0; i < nodes.length; i++) {
-          for (let j = i + 1; j < nodes.length; j++) {
-            if ((i + j) % 2 === 0 || Math.abs(i - j) === 1) {
-              edges.push({ source: nodes[i].id, target: nodes[j].id, weight: 0.8 });
-            }
-          }
         }
+      });
+    });
 
-        return { nodes, edges };
-      })();
+    // Add supporting passages if missing
+    supportingPassages.forEach((sp, i) => {
+      if (!seenIndices.has(i)) {
+        seenIndices.add(i);
+        const title = sp.includes(":") ? sp.split(":")[0].trim() : `Supporting #${i}`;
+        nodes.push({
+          id: i,
+          title,
+          snippet: sp.slice(0, 120),
+          text: sp,
+        });
+      }
+    });
+
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        if ((i + j) % 2 === 0 || Math.abs(i - j) === 1) {
+          edges.push({ source: nodes[i].id, target: nodes[j].id, weight: 0.8 });
+        }
+      }
+    }
+
+    return { nodes, edges };
+  }, [graphData, hopTrace, supportingPassages]);
 
   // Find neighbors of selected node
   const selectedNeighbors = selectedNode
@@ -125,41 +142,69 @@ export default function HopTrace({
   // Render view body
   const viewContent = (
     <div className="space-y-6">
-      {viewMode === "playback" && (
+      {viewMode === "studio" && (
         <div className="space-y-4">
           <ReasoningPlayback
             graphData={activeGraphData}
             hopTrace={hopTrace}
             supportingPassages={supportingPassages}
-            onFrameChange={(frame) => setActiveFrame(frame)}
+            onFrameChange={handleFrameChange}
           />
-          <ReasoningGraph2D
-            graphData={activeGraphData}
-            hopTrace={hopTrace}
-            supportingPassages={supportingPassages}
-            playbackFrame={activeFrame || undefined}
-            onSelectNode={(node) => setSelectedNode(node)}
-            height={isFullscreen ? 650 : 480}
-          />
-        </div>
-      )}
 
-      {viewMode === "3d" && (
-        <div className="space-y-4">
-          <ReasoningPlayback
-            graphData={activeGraphData}
-            hopTrace={hopTrace}
-            supportingPassages={supportingPassages}
-            onFrameChange={(frame) => setActiveFrame(frame)}
-          />
-          <ReasoningGraph3D
-            graphData={activeGraphData}
-            hopTrace={hopTrace}
-            supportingPassages={supportingPassages}
-            playbackFrame={activeFrame || undefined}
-            onSelectNode={(node) => setSelectedNode(node)}
-            height={isFullscreen ? 650 : 500}
-          />
+          {/* Sub-toggle for Dimension: 2D Physics Canvas vs 3D WebGL Nebula */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-slate-400">Dimension View:</span>
+              <div className="inline-flex rounded-xl border border-white/10 bg-black/60 p-1">
+                <button
+                  onClick={() => setGraphDimension("2d")}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-mono font-medium transition ${
+                    graphDimension === "2d"
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/20 font-bold"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <span>⚡ 2D Force Physics</span>
+                </button>
+                <button
+                  onClick={() => setGraphDimension("3d")}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-mono font-medium transition ${
+                    graphDimension === "3d"
+                      ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/20 font-bold"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <span>🌌 3D WebGL Nebula</span>
+                </button>
+              </div>
+            </div>
+
+            <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">
+              {graphDimension === "2d"
+                ? "Drag nodes to pin · Scroll to zoom · Click to inspect passage"
+                : "Left-drag to orbit · Right-drag to pan · Scroll to zoom"}
+            </span>
+          </div>
+
+          {graphDimension === "2d" ? (
+            <ReasoningGraph2D
+              graphData={activeGraphData}
+              hopTrace={hopTrace}
+              supportingPassages={supportingPassages}
+              playbackFrame={activeFrame || undefined}
+              onSelectNode={(node) => setSelectedNode(node)}
+              height={isFullscreen ? 650 : 500}
+            />
+          ) : (
+            <ReasoningGraph3D
+              graphData={activeGraphData}
+              hopTrace={hopTrace}
+              supportingPassages={supportingPassages}
+              playbackFrame={activeFrame || undefined}
+              onSelectNode={(node) => setSelectedNode(node)}
+              height={isFullscreen ? 650 : 500}
+            />
+          )}
         </div>
       )}
 
@@ -256,24 +301,14 @@ export default function HopTrace({
         {/* View Mode Buttons */}
         <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-black/50 p-1.5">
           <button
-            onClick={() => setViewMode("playback")}
+            onClick={() => setViewMode("studio")}
             className={`rounded-xl px-3 py-1.5 text-xs font-mono font-medium transition ${
-              viewMode === "playback"
+              viewMode === "studio"
                 ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/20 font-bold"
                 : "text-slate-400 hover:text-white"
             }`}
           >
-            🎬 Traversal Playback
-          </button>
-          <button
-            onClick={() => setViewMode("3d")}
-            className={`rounded-xl px-3 py-1.5 text-xs font-mono font-medium transition ${
-              viewMode === "3d"
-                ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/20 font-bold"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            🌌 3D Nebula
+            🎬 Playback Studio
           </button>
           <button
             onClick={() => setViewMode("steps")}

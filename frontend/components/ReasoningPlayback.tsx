@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { GraphData, GraphNode } from "@/lib/api";
 
 export type PlaybackFrame = {
@@ -189,17 +189,31 @@ export default function ReasoningPlayback({
   supportingPassages,
   onFrameChange,
 }: ReasoningPlaybackProps) {
-  const frames = buildPlaybackFrames(graphData, hopTrace, supportingPassages);
+  const frames = useMemo(
+    () => buildPlaybackFrames(graphData, hopTrace, supportingPassages),
+    [graphData, hopTrace, supportingPassages]
+  );
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<number>(1);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const onFrameChangeRef = useRef(onFrameChange);
+  const lastNotifiedIndex = useRef<number>(-1);
+
+  // Keep callback ref updated
+  useEffect(() => {
+    onFrameChangeRef.current = onFrameChange;
+  }, [onFrameChange]);
 
   const currentFrame = frames[currentIdx] || frames[0];
 
+  // Notify parent only when currentIdx or currentFrame stepIndex actually changes
   useEffect(() => {
-    onFrameChange(currentFrame);
-  }, [currentIdx, currentFrame, onFrameChange]);
+    if (currentFrame && lastNotifiedIndex.current !== currentIdx) {
+      lastNotifiedIndex.current = currentIdx;
+      onFrameChangeRef.current?.(currentFrame);
+    }
+  }, [currentIdx, currentFrame]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -344,7 +358,7 @@ export default function ReasoningPlayback({
 
         {/* Milestone Steps Bar */}
         <div className="flex justify-between text-[10px] font-mono text-slate-500 px-1">
-          {frames.map((f, i) => (
+          {frames.map((f: PlaybackFrame, i: number) => (
             <button
               key={i}
               onClick={() => {

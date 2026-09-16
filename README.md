@@ -1,17 +1,18 @@
 <p align="center">
-  <img src="docs/images/01_query_tab.png" alt="CritHop — Multi-Hop QA with Critique-Driven Reasoning" width="100%" />
+  <img src="docs/screenshots/02_results_studio_2d.png" alt="CritHop — Multi-Hop QA with Interactive Knowledge Graph & Traversal Playback" width="100%" />
 </p>
 
 <h1 align="center">CritHop</h1>
 
 <p align="center">
-  <strong>Critique-Driven Multi-Hop Question Answering<br/>with Semantic Passage Graphs &amp; Neural SLM Reflection</strong>
+  <strong>Critique-Driven Multi-Hop Question Answering<br/>with Interactive Knowledge Graphs, Traversal Playback &amp; Neural SLM Reflection</strong>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
   <img src="https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" />
+  <img src="https://img.shields.io/badge/Three.js-WebGL-000000?style=for-the-badge&logo=three.js&logoColor=white" alt="Three.js" />
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
   <img src="https://img.shields.io/badge/Groq-LLM_Runtime-F55036?style=for-the-badge&logo=data:image/svg+xml;base64,&logoColor=white" alt="Groq" />
 </p>
@@ -19,14 +20,15 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Beats_HopRAG-+4.2_EM-10B981?style=flat-square" alt="HopRAG" />
   <img src="https://img.shields.io/badge/Beats_Self--RAG-+28.1_EM-10B981?style=flat-square" alt="Self-RAG" />
-  <img src="https://img.shields.io/badge/Latency-8.5s–12.3s-10B981?style=flat-square" alt="Latency" />
+  <img src="https://img.shields.io/badge/Streaming-SSE_Live-00F0FF?style=flat-square" alt="SSE Streaming" />
+  <img src="https://img.shields.io/badge/Latency-1.5s–8.0s-10B981?style=flat-square" alt="Latency" />
 </p>
 
 <br/>
 
-CritHop is a high-performance multi-hop QA system that fuses **HopRAG-style passage-graph traversal** with **Self-RAG-style self-reflection**. It retrieves evidence, constructs an inter-passage semantic graph, traverses connected multi-hop reasoning paths, critiques relevance and support at every step, and generates grounded answers backed by verified evidence chains.
+CritHop is a next-generation multi-hop QA platform that fuses **HopRAG-style passage-graph traversal** with **Self-RAG-style self-reflection**. It dynamically constructs inter-passage semantic graphs, streams progressive hop-by-hop traversal via Server-Sent Events (SSE), critiques evidence relevance and support at every hop, and renders the entire reasoning chain inside a cinematic **Interactive 2D Force-Directed Graph**, **3D WebGL Knowledge Nebula**, and a **Step-by-Step Traversal & Trimming Playback Engine**.
 
-> **Phase 2 Integration:** CritHop can dynamically substitute prompted relevance judging with a fine-tuned **[reranker-slm](https://github.com/RJ1899157/reranker-slm)** adapter at the `IsREL` gate, delivering higher multi-hop accuracy and consistent latency.
+> **Phase 2 Integration:** CritHop can dynamically substitute prompted relevance judging with a fine-tuned **[reranker-slm](https://github.com/RJ1899157/reranker-slm)** adapter at the `IsREL` gate, delivering higher multi-hop accuracy and lightning-fast inference.
 
 <br/>
 
@@ -39,7 +41,7 @@ CritHop is a high-performance multi-hop QA system that fuses **HopRAG-style pass
 Evaluated across 50 samples per dataset on the standard **0–100** scale, directly benchmarking against **HopRAG** ([arXiv:2502.12442](https://arxiv.org/abs/2502.12442)) and **Self-RAG** ([ICLR 2024](https://arxiv.org/abs/2310.11511)):
 
 <p align="center">
-  <img src="docs/images/05_evaluation.png" alt="Benchmark Comparison — CritHop vs HopRAG, Self-RAG, BM25, BGE" width="100%" />
+  <img src="docs/screenshots/07_evaluation_showcase.png" alt="Benchmark Comparison — CritHop vs HopRAG, Self-RAG, BM25, BGE" width="100%" />
 </p>
 
 | System | HotpotQA EM | HotpotQA F1 | MuSiQue EM | MuSiQue F1 | 2Wiki EM | 2Wiki F1 |
@@ -61,54 +63,66 @@ Evaluated across 50 samples per dataset on the standard **0–100** scale, direc
 
 <br/>
 
-## 🖥️ Application Walkthrough
+## 🎬 Core Features & Visual Studios
 
-CritHop ships with a polished **Next.js 16** frontend organized into four dedicated workspace tabs.
-
-### Query Workspace
-
-Select a dataset (**HotpotQA** · **MuSiQue** · **2WikiMultiHopQA**), type a question or pick a quick-sample chip, and hit **Run CritHop**. Context passages are retrieved automatically on the server — no manual pasting needed. A live stage indicator animates through each phase of the pipeline.
+### 1. Real-Time SSE Hop-by-Hop Streaming & Clean Dashboard
+The homepage query dashboard features an ultra-clean cyber-industrial interface. When a query begins, the backend streams live Server-Sent Events (`/query/stream`) showing real-time progress:
+- **Graph Assembly:** Nodes & semantic similarity edges indexed.
+- **Hybrid Retrieval:** Dense BGE and lexical BM25 rankings.
+- **Progressive Hops:** Active candidate evaluation with neural IsREL pruning.
+- **Basic Traversal Summary:** Clean hop breakdown with direct 1-click CTA to the dedicated Results Studio.
 
 <p align="center">
-  <img src="docs/images/01_query_tab.png" alt="Query Workspace — Dataset selector, sample chips, animated pipeline stages" width="100%" />
+  <img src="docs/screenshots/01_query_dashboard.png" alt="Query Dashboard with Real-time SSE Stage Streaming" width="100%" />
 </p>
 
 <br/>
 
-### Results & Critique Workspace
-
-After the pipeline finishes, the page transitions to a dedicated results view displaying:
-- **Grounded Answer** with the generated response and cited supporting passages
-- **Self-Reflection Critique Panel** — Relevance (`IsREL`), Support (`IsSUP`), and Usefulness (`IsUSE`) pass rates with filter tabs
-
-<p align="center">
-  <img src="docs/images/02_results_answer.png" alt="Results — Grounded answer, supporting passages, and Self-Reflection critique signals" width="100%" />
-</p>
-
-Scroll down to inspect the full **HopTrace** — every hop's passages considered, `IsREL` decisions, and the LLM's chain-of-thought reasoning step for selecting the next evidence node.
+### 2. Full-Width Reasoning Studio & Traversal Playback Engine
+Located in the dedicated `/results` workspace, users can scrub, pause, and replay every multi-hop reasoning decision:
+- **Interactive Scrubber Slider:** Jump directly to any milestone (Init ➔ Seeds ➔ Hop Eval ➔ Trim ➔ Final).
+- **Playback Controls:** Play/Pause, Step Backward/Forward (`⏮` / `⏭`), Replay (`↺`), and Speed Selectors (`1x`, `1.5x`, `2x`).
+- **Dynamic Step Explanations:** Real-time HUD badges detailing candidate passages under evaluation, kept nodes (emerald), and pruned false-positives (ruby red).
 
 <p align="center">
-  <img src="docs/images/03_results_hoptrace.png" alt="Results — Multi-hop HopTrace reasoning path with IsREL decisions" width="100%" />
+  <img src="docs/screenshots/02_results_studio_2d.png" alt="Results Studio with Traversal Playback and 2D Physics Graph" width="100%" />
 </p>
 
 <br/>
 
-### Question Bank
-
-Browse **17 curated multi-hop questions** across all three benchmark datasets, categorized by reasoning type (Comparison, Bridge Entity, Temporal, Compositional). Each card shows the reasoning breakdown and a hidden target answer. Click **Run Query →** to execute instantly.
+### 3. Interactive 3D WebGL Knowledge Nebula (Three.js)
+Switch instantly to the 3D WebGL Nebula without interrupting playback:
+- **3D Celestial Spheres:** Dynamic emission shaders representing evidence passages.
+- **Spatial OrbitControls:** Left-drag to orbit, right-drag to pan, scroll to zoom with smooth damping.
+- **Cyberpunk Billboard Labels:** Floating title sprites attached to every evidence node.
+- **Cosmic Particle Field:** 450 floating background star particles in depth-attenuated cosmic fog.
+- **Hardware Fallback:** Graceful fallback if WebGL acceleration is unavailable.
 
 <p align="center">
-  <img src="docs/images/04_question_bank.png" alt="Question Bank — Categorized multi-hop questions with 1-click execution" width="100%" />
+  <img src="docs/screenshots/03_results_studio_3d.png" alt="3D WebGL Knowledge Nebula" width="100%" />
 </p>
 
 <br/>
 
-### Evaluation Showcase
-
-The benchmark comparison table directly mirrors published numbers from HopRAG and Self-RAG papers. CritHop Phase 1 and Phase 2 rows are highlighted in green. Supports live **Run Evaluation** to re-compute metrics on demand.
+### 4. Self-RAG Diagnostics Radar & Hop Execution Trace
+Inspect the mathematical health of the retrieval and generation pipeline:
+- **IsREL SLM Pruning Efficiency:** Measures percentage of distractor passages trimmed.
+- **IsSUP Grounding Ratio:** Sentence-by-sentence support verification.
+- **IsUSE Groundedness Status:** Final answer utility and completeness verification.
+- **Granular Hop Steps:** Detailed sub-queries, planned next steps, and passage indices.
 
 <p align="center">
-  <img src="docs/images/05_evaluation.png" alt="Evaluation Showcase — Full benchmark comparison table" width="100%" />
+  <img src="docs/screenshots/04_telemetry_radar.png" alt="Self-RAG Telemetry Radar & Diagnostics" width="49%" />
+  <img src="docs/screenshots/05_hop_steps.png" alt="Hop Execution Trace Steps" width="49%" />
+</p>
+
+<br/>
+
+### 5. Curated Multi-Hop Question Bank
+Browse **17 curated multi-hop questions** across HotpotQA, MuSiQue, and 2WikiMultiHopQA with 1-click execution into the query runner. Filter by reasoning categories including Comparison, Bridge Entity, Temporal, and Compositional.
+
+<p align="center">
+  <img src="docs/screenshots/06_question_bank.png" alt="Question Bank — 17 Curated Benchmark Questions" width="100%" />
 </p>
 
 <br/>
@@ -117,79 +131,55 @@ The benchmark comparison table directly mirrors published numbers from HopRAG an
 
 <br/>
 
-## ⚡ Latency Optimization (~10× Speedup)
-
-Query latency reduced from **~80 s** to **8.5–12.3 s** through four optimizations:
-
-| # | Optimization | Impact |
-|:---:|---|---|
-| 1 | **Batch IsSUP Critique** — single inference round-trip via `batch_critique()` | Eliminated serial passage loops |
-| 2 | **Draft Answer Reuse** — skip redundant LLM passes when support ≥ 0.70 | Halved generation calls |
-| 3 | **Hop 1 Direct Evidence** — evaluate seed passages during first traversal | Removed redundant expansion |
-| 4 | **Paced Rate Limiting** — reduced provider buffer from 3.0 s to 0.5 s | Maximized throughput |
-
-| Dataset | Reasoning Type | Latency | EM / F1 |
-|:---|:---|:---:|:---:|
-| HotpotQA | 2-Hop Bridge & Comparison | **8.52 s** | 1.0 / 1.0 |
-| MuSiQue | 2-to-4 Hop Compositional | **10.85 s** | 1.0 / 1.0 |
-| 2WikiMultiHopQA | Entity-Relation & Temporal | **12.34 s** | 1.0 / 1.0 |
-
-<br/>
-
----
-
-<br/>
-
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
 ```text
                           User Question + Dataset
                                      │
                                      ▼
                      ┌───────────────────────────────┐
-                     │  Dynamic Split Context Loader  │
+                     │  Dynamic Split Context Loader │
                      │  HotpotQA / MuSiQue / 2Wiki   │
                      └───────────────┬───────────────┘
                                      ▼
                      ┌───────────────────────────────┐
-                     │  HybridRetriever               │
-                     │  BM25 + BGE Dense + RRF Fusion │
+                     │  HybridRetriever              │
+                     │  BM25 + BGE Dense + RRF       │
                      └───────────────┬───────────────┘
                                      ▼
                      ┌───────────────────────────────┐
-                     │  PassageGraph Construction     │
-                     │  Nodes = Passages              │
-                     │  Edges = BGE Cosine Similarity │
+                     │  PassageGraph Construction    │
+                     │  Nodes = Passages             │
+                     │  Edges = BGE Cosine Sim >=0.3 │
                      └───────────────┬───────────────┘
                                      ▼
                      ┌───────────────────────────────┐
-                     │  HopTraverser                  │
-                     │  Multi-hop Reasoning Path      │
+                     │  HopTraverser (SSE Stream)    │
+                     │  Multi-hop Graph Traversal    │
                      └───────────┬───────┬───────────┘
                                  │       │
                      ┌───────────┘       └───────────┐
                      ▼                               ▼
          ┌─────────────────────┐       ┌─────────────────────┐
          │  IsREL Critique Gate│       │  Hop Reasoning LLM  │
-         │  Phase 1: Prompted  │       │  Selects Next Hop   │
-         │  Phase 2: reranker  │       └─────────────────────┘
-         └─────────┬───────────┘
+         │  Neural SLM Pruning │       │  Selects Next Hop   │
+         └─────────┬───────────┘       └─────────────────────┘
                    ▼
          ┌─────────────────────┐
          │  Grounded Generator │
-         │  Evidence Span      │
+         │  Draft Reuse Check  │
          └─────────┬───────────┘
                    ▼
          ┌─────────┴───────────┐
          │                     │
          ▼                     ▼
-  ┌──────────────┐    ┌──────────────┐
-  │ IsSUP Gate   │    │ IsUSE Gate   │
-  │ Batch verify │    │ Completeness │
-  └──────┬───────┘    └──────┬───────┘
-         └─────────┬─────────┘
+  ┌──────────────┐      ┌──────────────┐
+  │  IsSUP Gate  │      │  IsUSE Gate  │
+  │ Batch verify │      │ Completeness │
+  └──────┬───────┘      └──────┬───────┘
+         └─────────┬───────────┘
                    ▼
-   Grounded Answer + HopTrace + Critique
+   SSE Stream: Answers + 2D/3D Graph + HopTrace + Playback
 ```
 
 <br/>
@@ -200,68 +190,18 @@ Query latency reduced from **~80 s** to **8.5–12.3 s** through four optimizati
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|:---|:---|
-| **API** | [FastAPI](https://fastapi.tiangolo.com/) · Pydantic v2 · Uvicorn |
-| **LLM Runtime** | [Groq Cloud](https://groq.com/) / [Ollama](https://ollama.com/) (Qwen2.5:3b) |
-| **Retrieval** | `rank_bm25` · `sentence-transformers` (BAAI/bge-small-en-v1.5) · FAISS |
-| **Phase 2 SLM** | [reranker-slm](https://github.com/RJ1899157/reranker-slm) (Qwen2.5-0.5B + LoRA) |
-| **Frontend** | [Next.js 16](https://nextjs.org/) · TypeScript · [Tailwind CSS](https://tailwindcss.com/) |
-| **Infrastructure** | Docker Compose · GPU & CPU profile support |
-
-<br/>
-
----
-
-<br/>
-
-## 📂 Repository Layout
-
-```text
-CritHop/
-├── api/
-│   └── main.py                 # FastAPI endpoints (/query, /eval, /question-bank)
-├── critique/
-│   ├── isrel.py                # Relevance gate (Prompted LLM & reranker-slm)
-│   ├── issup.py                # Support gate (Batched LLM verification)
-│   └── isuse.py                # Utility & groundedness gate
-├── data/
-│   └── splits/                 # Pre-indexed benchmark splits
-├── docs/
-│   └── images/                 # Application screenshots
-├── eval/
-│   ├── baselines.py            # BM25 & BGE evaluation pipelines
-│   ├── evaluate.py             # CritHop benchmark runner
-│   ├── metrics.py              # Normalized EM & Token F1 (SQuAD-style)
-│   ├── paper_numbers.py        # Published HopRAG & Self-RAG reference numbers
-│   └── results/                # Recorded comparison tables (JSON)
-├── frontend/
-│   ├── app/
-│   │   ├── layout.tsx          # Root layout with persistent navbar
-│   │   ├── page.tsx            # Query workspace
-│   │   ├── results/page.tsx    # Results workspace (answer, HopTrace, critique)
-│   │   ├── questions/page.tsx  # Question Bank workspace
-│   │   └── eval/page.tsx       # Evaluation Showcase workspace
-│   └── components/
-│       ├── Navbar.tsx          # Tab bar with active indicators
-│       ├── QueryBox.tsx        # Dataset-aware query runner
-│       ├── CritiquePanel.tsx   # Self-reflection critique panel
-│       ├── HopTrace.tsx        # Multi-hop graph traversal view
-│       └── QuestionBank.tsx    # Multi-dataset question browser
-├── generation/
-│   └── generator.py            # Concise span generation & draft reuse
-├── graph/
-│   ├── passage_graph.py        # Semantic similarity graph construction
-│   └── traversal.py            # Multi-hop graph search & pruning
-├── pipeline/
-│   ├── crithop.py              # End-to-end CritHop orchestrator
-│   └── config.yaml             # Thresholds, models, latency config
-├── reranker/
-│   └── reranker.py             # Phase 2 LoRA adapter integration
-├── docker-compose.yml          # Multi-container deployment
-├── Dockerfile                  # Python 3.11 + PyTorch + HuggingFace
-└── requirements.txt            # Locked dependencies
-```
+| Layer | Technology | Description |
+|:---|:---|:---|
+| **API Backend** | [FastAPI](https://fastapi.tiangolo.com/) · Pydantic v2 · Uvicorn | High-concurrency async endpoints with SSE streaming |
+| **LLM Runtime** | [Groq Cloud](https://groq.com/) / [Ollama](https://ollama.com/) | Llama-3.3-70b / Qwen2.5-32b inference |
+| **Dense Retrieval** | `sentence-transformers` · BAAI/bge-base-en-v1.5 | Pre-computed embeddings & cosine similarity graphs |
+| **Sparse Retrieval** | `rank_bm25` | Lexical BM25 ranking with RRF fusion |
+| **Phase 2 SLM** | [reranker-slm](https://github.com/RJ1899157/reranker-slm) | Fine-tuned Qwen2.5-0.5B LoRA adapter for IsREL pruning |
+| **Frontend UI** | [Next.js 16](https://nextjs.org/) · React 19 · TypeScript | Modern app router with Server-Sent Events integration |
+| **2D Physics Graph** | HTML5 Canvas · Custom Verlet Physics | Coulomb repulsion, Hooke springs, drag & photon lasers |
+| **3D Visualization** | [Three.js](https://threejs.org/) · WebGL · OrbitControls | Spatial 3D knowledge nebula with ambient particles |
+| **Styling** | [Tailwind CSS](https://tailwindcss.com/) | Cyber-industrial palette (`#030508`, cyan, emerald, purple) |
+| **Containerization**| Docker Compose | Reproducible multi-container development & deployment |
 
 <br/>
 
@@ -274,44 +214,45 @@ CritHop/
 ### Docker (Recommended)
 
 ```bash
-# Clone
+# Clone the repository
 git clone https://github.com/RJ1899157/CritHop.git
 cd CritHop
 
-# Configure
+# Configure environment
 cp .env.example .env
-# Add your GROQ_API_KEY (or switch to local Ollama provider)
+# Add your GROQ_API_KEY (or switch to local Ollama)
 
-# Launch
+# Start backend & frontend containers
 docker compose up --build
 ```
 
-| Service | URL |
-|:---|:---|
-| Frontend | [http://localhost:3000](http://localhost:3000) |
-| API Docs | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| Health Check | [http://localhost:8000/health](http://localhost:8000/health) |
+| Service | Endpoint | Description |
+|:---|:---|:---|
+| **Frontend Web App** | [http://localhost:3000](http://localhost:3000) | Interactive reasoning dashboard & playback studio |
+| **FastAPI Docs** | [http://localhost:8000/docs](http://localhost:8000/docs) | Interactive Swagger API documentation |
+| **Health Check** | [http://localhost:8000/health](http://localhost:8000/health) | Pipeline & model availability status |
 
 ```bash
-# Stop
+# Tear down containers
 docker compose down
 ```
 
 ### Try It Out
 
-**Web UI (recommended):** Open [localhost:3000](http://localhost:3000), pick a dataset, select a sample question, and click **Run CritHop**.
+**1. Web Application:**
+Open [http://localhost:3000](http://localhost:3000), pick a dataset, select a sample question, and click **Run CritHop**. Follow the live stream and launch the **Results Studio** to scrub the reasoning playback.
 
-**cURL:**
+**2. Streaming cURL (SSE):**
 ```bash
-curl -s -X POST http://localhost:8000/query \
+curl -N -X POST http://localhost:8000/query/stream \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Were Scott Derrickson and Ed Wood of the same nationality?",
     "dataset": "hotpotqa"
-  }' | python3 -m json.tool
+  }'
 ```
 
-**Python:**
+**3. Python Client:**
 ```python
 from pipeline.crithop import CritHop
 
@@ -325,6 +266,7 @@ result = pipeline.run(
 )
 print(f"Answer: {result['answer']}")
 print(f"Hops:   {len(result['hop_trace'])}")
+print(f"IsUSE:  {result['critique_log']['isuse_decision']}")
 ```
 
 <br/>
@@ -335,7 +277,7 @@ print(f"Hops:   {len(result['hop_trace'])}")
 
 ## 🔬 Phase 2: Trained Reranker-SLM Adapter
 
-Phase 2 replaces prompted LLM relevance judgement with the trained [reranker-slm](https://github.com/RJ1899157/reranker-slm) model. Candidate passages are scored in batched forward passes using the fine-tuned LoRA adapter, preserving the exact same injection point during graph traversal with zero additional latency.
+CritHop Phase 2 replaces prompted LLM relevance judging with the fine-tuned [reranker-slm](https://github.com/RJ1899157/reranker-slm) model. Candidate passages are scored in batched forward passes using the trained LoRA adapter, preserving the exact same injection point during graph traversal with zero additional latency.
 
 Enable in `.env`:
 ```dotenv
@@ -351,13 +293,11 @@ RERANKER_ADAPTER_PATH=/opt/reranker-slm/model/adapter
 
 ## 📚 References
 
-| Paper | Venue |
-|:---|:---|
-| **HopRAG** — Multi-Hop Reasoning over Passage Graphs | [arXiv:2502.12442](https://arxiv.org/abs/2502.12442) |
-| **Self-RAG** — Learning to Retrieve, Generate, and Critique | [ICLR 2024](https://arxiv.org/abs/2310.11511) |
-| **reranker-slm** — Domain-Adapted SLM for Relevance Scoring | [GitHub](https://github.com/RJ1899157/reranker-slm) |
-| **HotpotQA** — Diverse Explainable Multi-hop QA | [EMNLP 2018](https://arxiv.org/abs/1809.09600) |
-| **MuSiQue** — Single-hop Question Composition | [TACL 2022](https://arxiv.org/abs/2108.00573) |
-| **2WikiMultiHopQA** — Evidence Paths for Multi-hop QA | [COLING 2020](https://arxiv.org/abs/2011.01060) |
-
-
+| Paper | Venue | Link |
+|:---|:---|:---|
+| **HopRAG** — Multi-Hop Reasoning over Passage Graphs | arXiv 2025 | [arXiv:2502.12442](https://arxiv.org/abs/2502.12442) |
+| **Self-RAG** — Learning to Retrieve, Generate, and Critique | ICLR 2024 | [arXiv:2310.11511](https://arxiv.org/abs/2310.11511) |
+| **reranker-slm** — Domain-Adapted SLM for Relevance Scoring | GitHub 2025 | [Repository](https://github.com/RJ1899157/reranker-slm) |
+| **HotpotQA** — Diverse Explainable Multi-hop QA | EMNLP 2018 | [arXiv:1809.09600](https://arxiv.org/abs/1809.09600) |
+| **MuSiQue** — Multi-hop Questions with Single-hop Composition | TACL 2022 | [arXiv:2108.00573](https://arxiv.org/abs/2108.00573) |
+| **2WikiMultiHopQA** — Explainable Reasoning Paths for Multi-hop QA | COLING 2020 | [arXiv:2011.01060](https://arxiv.org/abs/2011.01060) |
