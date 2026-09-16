@@ -21,6 +21,39 @@ from retrieval.bm25_retriever import BM25Retriever
 from retrieval.hybrid import HybridRetriever
 
 
+def _extract_graph_data(graph_dict: dict) -> dict:
+    """Convert PassageGraph internal dict to serializable frontend graph data."""
+    if not isinstance(graph_dict, dict):
+        return {"nodes": [], "edges": []}
+    nodes_raw = graph_dict.get("nodes", {})
+    nodes = []
+    for idx, n_data in nodes_raw.items():
+        text = n_data.get("text", "") if isinstance(n_data, dict) else str(n_data)
+        title = ""
+        if ":" in text[:60]:
+            title = text.split(":", 1)[0].strip()
+        elif "\n" in text[:60]:
+            title = text.split("\n", 1)[0].strip()
+        else:
+            title = f"Passage {idx}"
+        nodes.append({
+            "id": int(idx),
+            "title": title,
+            "text": text,
+            "snippet": text[:140] + ("..." if len(text) > 140 else ""),
+        })
+    adjacency = graph_dict.get("adjacency", {})
+    edges = []
+    seen = set()
+    for src, neighbors in adjacency.items():
+        for tgt in neighbors:
+            edge_key = tuple(sorted([int(src), int(tgt)]))
+            if edge_key not in seen and edge_key[0] != edge_key[1]:
+                seen.add(edge_key)
+                edges.append({"source": edge_key[0], "target": edge_key[1], "weight": 1.0})
+    return {"nodes": nodes, "edges": edges}
+
+
 class CritHop:
     """Run retrieval, multi-hop traversal, critique, and generation."""
 
@@ -89,6 +122,7 @@ class CritHop:
             n_nodes = len(graph_dict.get("nodes", {}))
             n_edges = sum(len(neighbors) for neighbors in graph_dict.get("adjacency", {}).values()) // 2
             print(f"PassageGraph built: {n_nodes} nodes, {n_edges} edges")
+            serializable_graph = _extract_graph_data(graph_dict)
 
             self.bm25 = BM25Retriever(context_passages)
             self.bge = BGERetriever(
@@ -134,6 +168,7 @@ class CritHop:
                 "question": question,
                 "answer": generation_result["answer"],
                 "hop_trace": self.traverser.hop_log,
+                "graph": serializable_graph,
                 "critique_log": {
                     "isrel_decisions": isrel_decisions,
                     "issup_decisions": generation_result["issup_scores"],
@@ -175,11 +210,13 @@ class CritHop:
                 graph_dict = graph_data if isinstance(graph_data, dict) else {}
             n_nodes = len(graph_dict.get("nodes", {}))
             n_edges = sum(len(neighbors) for neighbors in graph_dict.get("adjacency", {}).values()) // 2
+            serializable_graph = _extract_graph_data(graph_dict)
 
             yield {
                 "event": "graph_built",
                 "nodes": n_nodes,
                 "edges": n_edges,
+                "graph_data": serializable_graph,
                 "message": f"PassageGraph active: {n_nodes} nodes, {n_edges} semantic similarity edges",
             }
 
@@ -256,6 +293,7 @@ class CritHop:
                 "question": question,
                 "answer": generation_result["answer"],
                 "hop_trace": self.traverser.hop_log,
+                "graph": serializable_graph,
                 "critique_log": {
                     "isrel_decisions": isrel_decisions,
                     "issup_decisions": generation_result["issup_scores"],

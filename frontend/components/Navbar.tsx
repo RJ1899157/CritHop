@@ -52,34 +52,48 @@ export default function Navbar() {
         </Link>
 
         {/* Distinct Tab Navigation */}
-        <div className="flex items-center rounded-2xl border border-white/10 bg-white/[0.04] p-1 shadow-inner">
-          {navItems.map((item) => {
-            const isActive = item.exact
-              ? pathname === item.href
-              : pathname.startsWith(item.href);
+        <div className="flex items-center gap-4">
+          <div className="flex items-center rounded-2xl border border-white/10 bg-white/[0.04] p-1 shadow-inner">
+            {navItems.map((item) => {
+              const isActive = item.exact
+                ? pathname === item.href
+                : pathname.startsWith(item.href);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`relative flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-medium transition ${
-                  isActive
-                    ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/40 shadow-sm font-semibold"
-                    : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent"
-                }`}
-              >
-                {isActive && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                )}
-                <span>{item.name}</span>
-                {item.badge && (
-                  <span className="hidden sm:inline-block ml-1 rounded-full bg-emerald-400/10 px-1.5 py-0.2 text-[9px] text-emerald-300 font-normal">
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`relative flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-medium transition ${
+                    isActive
+                      ? "bg-cyan-400/20 text-cyan-300 border border-cyan-400/40 shadow-sm font-semibold"
+                      : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  {isActive && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  )}
+                  <span>{item.name}</span>
+                  {item.badge && (
+                    <span className="hidden sm:inline-block ml-1 rounded-full bg-cyan-400/10 px-1.5 py-0.2 text-[9px] text-cyan-300 font-normal">
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Telemetry Status Pill */}
+          <div className="hidden md:flex items-center gap-2 rounded-2xl border border-white/10 bg-black/40 px-3 py-1.5 text-[11px] font-mono">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-slate-400">Core:</span>
+            <span className="text-cyan-300 font-semibold">Qwen-27B</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-purple-300">SSE Live</span>
+          </div>
         </div>
       </div>
     </nav>

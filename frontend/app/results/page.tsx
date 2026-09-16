@@ -178,7 +178,13 @@ export default function ResultsPage() {
             answer={result.answer}
             supportingPassages={result.supporting_passages ?? []}
           />
-          <HopTrace hopTrace={result.hop_trace ?? []} />
+          <HopTrace
+            hopTrace={result.hop_trace ?? []}
+            graphData={result.graph}
+            supportingPassages={result.supporting_passages ?? []}
+            critiqueLog={result.critique_log}
+            retrievalRetry={result.retrieval_retry}
+          />
         </div>
         <div>
           <CritiquePanel

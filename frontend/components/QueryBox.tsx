@@ -3,8 +3,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { queryCritHopStream, type QueryResult, type StreamEvent } from "@/lib/api";
+import confetti from "canvas-confetti";
+import { queryCritHopStream, type QueryResult, type StreamEvent, type GraphData } from "@/lib/api";
 import { useQueryResult } from "@/context/ResultContext";
+import ReasoningGraph2D from "./ReasoningGraph2D";
 
 const SAMPLE_QUESTIONS: Record<string, string[]> = {
   hotpotqa: [
@@ -32,6 +34,7 @@ const SAMPLE_QUESTIONS: Record<string, string[]> = {
 type StreamState = {
   stageMessage: string;
   graph: { nodes: number; edges: number } | null;
+  graphData: GraphData | null;
   retrieval: { count: number } | null;
   hops: Array<{ hop: number; kept?: number; pruned?: number; reasoning?: string }>;
   critique: { supporting: number; isuse: boolean } | null;
@@ -41,6 +44,7 @@ type StreamState = {
 const INITIAL_STREAM_STATE: StreamState = {
   stageMessage: "",
   graph: null,
+  graphData: null,
   retrieval: null,
   hops: [],
   critique: null,
@@ -103,6 +107,7 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
       setStreamState((prev) => ({
         ...prev,
         graph: { nodes: ev.nodes!, edges: ev.edges || 0 },
+        graphData: ev.graph_data || null,
       }));
     } else if (ev.event === "retrieval_complete" && ev.count !== undefined) {
       setStreamState((prev) => ({
@@ -176,6 +181,16 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
       );
 
       setResult(result);
+      try {
+        confetti({
+          particleCount: 75,
+          spread: 65,
+          origin: { y: 0.65 },
+          colors: ["#00f0ff", "#32d74b", "#bf5af2", "#ffffff"],
+        });
+      } catch {
+        // ignore
+      }
       if (onResult) {
         onResult(result);
       } else {
@@ -336,6 +351,21 @@ export default function QueryBox({ onResult, initialQuestion, initialDataset }: 
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Live Mini Force Graph Visualizer */}
+          {streamState.graphData && streamState.graphData.nodes.length > 0 && (
+            <div className="pt-2 border-t border-emerald-400/20">
+              <div className="flex items-center justify-between pb-1 text-[10px] font-mono text-cyan-300">
+                <span>⚡ LIVE GRAPH EVOLUTION</span>
+                <span>PHYSICS RUNNING</span>
+              </div>
+              <ReasoningGraph2D
+                graphData={streamState.graphData}
+                hopTrace={streamState.hops}
+                height={210}
+              />
             </div>
           )}
         </div>

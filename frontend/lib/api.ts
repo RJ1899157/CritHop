@@ -1,7 +1,29 @@
+export type GraphNode = {
+  id: number;
+  title: string;
+  snippet: string;
+  text: string;
+  status?: "candidate" | "kept" | "pruned" | "supporting";
+  hop?: number;
+};
+
+export type GraphEdge = {
+  source: number;
+  target: number;
+  weight?: number;
+  isTraversal?: boolean;
+};
+
+export type GraphData = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
 export type QueryResult = {
   question: string;
   answer: string;
   hop_trace: Array<Record<string, unknown>>;
+  graph?: GraphData;
   critique_log: {
     isrel_decisions: boolean[];
     issup_decisions: boolean[];
@@ -71,6 +93,7 @@ export type StreamEvent = {
   issup_scores?: boolean[];
   isuse_score?: boolean;
   supporting_count?: number;
+  graph_data?: GraphData;
   result?: QueryResult;
 };
 
