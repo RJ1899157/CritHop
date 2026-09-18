@@ -96,6 +96,7 @@ def test_crithop_run_returns_required_structure(monkeypatch, tmp_path):
         "supporting_passages",
         "retrieval_retry",
         "graph",
+        "graph_data",
     }
     assert result["question"] == "What nationality?"
     assert isinstance(result["answer"], str)
