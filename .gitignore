@@ -16,6 +16,8 @@ __pycache__/
 # Frontend
 node_modules/
 .next/
+frontend/.next/
+frontend/next-env.d.ts
 frontend/.env*
 frontend/out/
 
